@@ -338,11 +338,19 @@
                     const rect = e.currentTarget.getBoundingClientRect()
                     const spaceBelow = window.innerHeight - rect.bottom
                     const spaceAbove = rect.top
-                    const estimatedPopoverHeight = 200 // 대략적인 팝오버 높이
+                    const estimatedPopoverHeight = 200
+                    const estimatedPopoverWidth = 400
+                    const PADDING = 16
+
+                    let x = rect.left + rect.width / 2
+                    // 화면 경계 체크 - 최소/최대 x 위치 제한
+                    const minX = estimatedPopoverWidth / 2 + PADDING
+                    const maxX = window.innerWidth - estimatedPopoverWidth / 2 - PADDING
+                    x = Math.max(minX, Math.min(x, maxX))
 
                     openFolderPopover = {
                         id: persona.id,
-                        x: rect.left + rect.width / 2,
+                        x: x,
                         y: spaceBelow > estimatedPopoverHeight ? rect.bottom + 8 : rect.top - 8,
                         above: spaceBelow <= estimatedPopoverHeight
                     }
@@ -353,10 +361,17 @@
                         const spaceBelow = window.innerHeight - rect.bottom
                         const spaceAbove = rect.top
                         const estimatedPopoverHeight = 200
+                        const estimatedPopoverWidth = 400
+                        const PADDING = 16
+
+                        let x = rect.left + rect.width / 2
+                        const minX = estimatedPopoverWidth / 2 + PADDING
+                        const maxX = window.innerWidth - estimatedPopoverWidth / 2 - PADDING
+                        x = Math.max(minX, Math.min(x, maxX))
 
                         openFolderPopover = {
                             id: persona.id,
-                            x: rect.left + rect.width / 2,
+                            x: x,
                             y: spaceBelow > estimatedPopoverHeight ? rect.bottom + 8 : rect.top - 8,
                             above: spaceBelow <= estimatedPopoverHeight
                         }
@@ -417,7 +432,7 @@
                 openFolderPopover = null
             }
         }}></div>
-        <div class="fixed z-50 bg-darkbg border border-selected rounded-lg shadow-xl p-3 flex flex-wrap gap-2 max-w-md pointer-events-auto"
+        <div class="fixed z-50 bg-darkbg border border-selected rounded-lg shadow-xl p-3 flex flex-wrap gap-2 max-w-md max-w-[calc(100vw-32px)] pointer-events-auto"
             style:left={`${openFolderPopover.x}px`}
             style:top={`${openFolderPopover.y}px`}
             style:transform={openFolderPopover.above ? "translate(-50%, -100%)" : "translateX(-50%)"}>
