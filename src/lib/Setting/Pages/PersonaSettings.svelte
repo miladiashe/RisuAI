@@ -66,17 +66,17 @@
                 if(relativeX < DROP_ZONE_LEFT_THRESHOLD){
                     // 좌측: 왼쪽에 삽입
                     console.log('Calling inserter (left)')
-                    inserter(currentDrag, {index: ind})
+                    inserter(currentDrag, {index: ind.index})
                 }
                 else if(relativeX > DROP_ZONE_RIGHT_THRESHOLD){
                     // 우측: 오른쪽에 삽입
                     console.log('Calling inserter (right)')
-                    inserter(currentDrag, {index: ind + 1})
+                    inserter(currentDrag, {index: ind.index + 1})
                 }
                 else{
                     // 중간: 폴더 생성
                     console.log('Calling createFolder')
-                    createFolder(currentDrag, {index: ind})
+                    createFolder(currentDrag, {index: ind.index})
                 }
             }
         } catch (error) {
