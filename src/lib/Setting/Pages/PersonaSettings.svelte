@@ -94,7 +94,13 @@
                     inserter(currentDrag, {index: ind.index + 1})
                 }
                 else{
-                    // 중간: 폴더 생성
+                    // 중간: 폴더 생성 또는 폴더에 추가
+                    // 드롭 대상이 폴더이고, 드래그한 아이템이 같은 폴더에서 온 경우 무시
+                    const targetPersona = personaImages[ind.index]
+                    if (targetPersona.type === 'folder' && currentDrag.folder === targetPersona.id) {
+                        // 같은 폴더로 돌아가는 경우 - 아무것도 안함
+                        return
+                    }
                     createFolder(currentDrag, {index: ind.index})
                 }
             }
@@ -256,7 +262,8 @@
         const folderIndex = getFolderIndex(folderId)
         if (folderIndex === -1) return
 
-        const folder = DBState.db.personaOrder[folderIndex] as any
+        // 폴더 객체를 복사해서 새로 만들어야 reactivity가 작동함
+        const folder = {...(DBState.db.personaOrder[folderIndex] as any)}
         folder.img = imgp
         DBState.db.personaOrder[folderIndex] = folder
         DBState.db.personaOrder = [...DBState.db.personaOrder]
@@ -284,7 +291,8 @@
         const folderIndex = getFolderIndex(folderId)
         if (folderIndex === -1) return
 
-        const folder = DBState.db.personaOrder[folderIndex] as any
+        // 폴더 객체를 복사해서 새로 만들어야 reactivity가 작동함
+        const folder = {...(DBState.db.personaOrder[folderIndex] as any)}
         folder.name = newName
         DBState.db.personaOrder[folderIndex] = folder
         DBState.db.personaOrder = [...DBState.db.personaOrder]
