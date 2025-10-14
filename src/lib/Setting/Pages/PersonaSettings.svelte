@@ -35,9 +35,16 @@
         currentTarget: EventTarget & HTMLDivElement;
     }
     let currentDrag: DragData = $state(null)
+    let dragHoverIndex: number = $state(-1)
+    let dragHoverZone: 'left' | 'center' | 'right' | null = $state(null)
+
+    const getDropZone = (relativeX: number): 'left' | 'center' | 'right' => {
+        if(relativeX < DROP_ZONE_LEFT_THRESHOLD) return 'left'
+        if(relativeX > DROP_ZONE_RIGHT_THRESHOLD) return 'right'
+        return 'center'
+    }
 
     const personaDragStart = (ind:DragData, e:DragEv) => {
-        console.log('personaDragStart called', ind, e.target, e.currentTarget)
         e.dataTransfer.setData('text/plain', '');
         currentDrag = ind
         const avatar = e.currentTarget.querySelector('[role="button"]')
@@ -46,42 +53,48 @@
         }
     }
 
-    const personaDragOver = (e:DragEv) => {
-        console.log('personaDragOver called')
+    const personaDragOver = (ind:DragData, e:DragEv) => {
         e.preventDefault()
         e.dataTransfer.dropEffect = 'move'
+
+        const rect = e.currentTarget.getBoundingClientRect()
+        const mouseX = e.clientX - rect.left
+        const relativeX = mouseX / rect.width
+
+        dragHoverIndex = ind.index
+        dragHoverZone = getDropZone(relativeX)
+    }
+
+    const personaDragLeave = () => {
+        dragHoverIndex = -1
+        dragHoverZone = null
     }
 
     const personaDrop = (ind:DragData, e:DragEv) => {
-        console.log('personaDrop called', ind)
         e.preventDefault()
+        dragHoverIndex = -1
+        dragHoverZone = null
         try {
             if(currentDrag){
                 const rect = e.currentTarget.getBoundingClientRect()
                 const mouseX = e.clientX - rect.left
-                const relativeX = mouseX / rect.width // 0.0 ~ 1.0
+                const relativeX = mouseX / rect.width
+                const zone = getDropZone(relativeX)
 
-                console.log('relativeX:', relativeX, 'currentDrag:', currentDrag, 'targetIndex:', ind)
-
-                if(relativeX < DROP_ZONE_LEFT_THRESHOLD){
+                if(zone === 'left'){
                     // 좌측: 왼쪽에 삽입
-                    console.log('Calling inserter (left)')
                     inserter(currentDrag, {index: ind.index})
                 }
-                else if(relativeX > DROP_ZONE_RIGHT_THRESHOLD){
+                else if(zone === 'right'){
                     // 우측: 오른쪽에 삽입
-                    console.log('Calling inserter (right)')
                     inserter(currentDrag, {index: ind.index + 1})
                 }
                 else{
                     // 중간: 폴더 생성
-                    console.log('Calling createFolder')
                     createFolder(currentDrag, {index: ind.index})
                 }
             }
-        } catch (error) {
-            console.error('Error in personaDrop:', error)
-        }
+        } catch (error) {}
     }
 
     const preventAll = (e:Event) => {
@@ -148,12 +161,9 @@
     }
 
     const inserter = (mainIndex:DragData, targetIndex:DragData) => {
-        console.log('inserter called:', mainIndex, targetIndex)
         if(mainIndex.index === targetIndex.index && mainIndex.folder === targetIndex.folder){
-            console.log('Same index, returning')
             return
         }
-        console.log('Before:', DBState.db.personaOrder)
         let db = DBState.db
         let mainFolderIndex = mainIndex.folder ? getFolderIndex(mainIndex.folder) : null
         let targetFolderIndex = targetIndex.folder ? getFolderIndex(targetIndex.folder) : null
@@ -228,13 +238,10 @@
         }
 
         DBState.db.personaOrder = db.personaOrder
-        console.log('After:', DBState.db.personaOrder)
         checkPersonaOrder()
     }
 
     $effect(() => {
-        console.log('$effect triggered, personaOrder changed')
-        console.log('Current personaOrder:', DBState.db.personaOrder)
         let newPersonaImages: personaType[] = [];
         const idObject = getPersonaIndexObject()
         for (const id of DBState.db.personaOrder) {
@@ -287,11 +294,17 @@
         <!-- Persona container with drag -->
         <div role="listitem"
             class="relative cursor-grab active:cursor-grabbing select-none"
+            class:border-l-4={dragHoverIndex === ind && dragHoverZone === 'left'}
+            class:border-r-4={dragHoverIndex === ind && dragHoverZone === 'right'}
+            class:border-4={dragHoverIndex === ind && dragHoverZone === 'center'}
+            class:border-green-500={dragHoverIndex === ind && (dragHoverZone === 'left' || dragHoverZone === 'right')}
+            class:border-blue-500={dragHoverIndex === ind && dragHoverZone === 'center'}
             draggable="true"
             ondragstart={(e) => {personaDragStart({index:ind}, e)}}
-            ondragover={personaDragOver}
+            ondragover={(e) => {personaDragOver({index:ind}, e)}}
             ondrop={(e) => {personaDrop({index:ind}, e)}}
             ondragenter={preventAll}
+            ondragleave={personaDragLeave}
         >
             {#if persona.type === 'normal'}
                 <!-- svelte-ignore a11y_no_static_element_interactions -->
