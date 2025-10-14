@@ -8,7 +8,8 @@
     import { alertConfirm, alertSelect } from "src/ts/alert";
     import { getCharImage } from "src/ts/characters";
     import { changeUserPersona, exportUserPersona, importUserPersona, saveUserPersona, selectUserImg } from "src/ts/persona";
-    import { setDatabase } from "src/ts/storage/database.svelte";
+    import { setDatabase, saveImage } from "src/ts/storage/database.svelte";
+    import { selectSingleFile } from "src/ts/util";
     import { DBState } from 'src/ts/stores.svelte';
     import { getPersonaIndexObject } from "src/ts/util";
     import { checkPersonaOrder } from "src/ts/globalApi.svelte";
@@ -243,6 +244,72 @@
         checkPersonaOrder()
     }
 
+    // 폴더 이미지 선택 함수
+    async function selectFolderImg(folderId: string) {
+        const selected = await selectSingleFile(['png'])
+        if (!selected) return
+
+        const img = selected.data
+        const imgp = await saveImage(img)
+
+        const folderIndex = getFolderIndex(folderId)
+        if (folderIndex === -1) return
+
+        const folder = DBState.db.personaOrder[folderIndex] as any
+        folder.img = imgp
+        DBState.db.personaOrder[folderIndex] = folder
+        DBState.db.personaOrder = [...DBState.db.personaOrder]
+    }
+
+    // 폴더 삭제 함수 (페르소나들은 바깥으로)
+    async function deleteFolder(folderId: string) {
+        const folderIndex = getFolderIndex(folderId)
+        if (folderIndex === -1) return
+
+        const folder = DBState.db.personaOrder[folderIndex] as any
+        const d = await alertConfirm(`Delete folder "${folder.name}"? Personas inside will be moved out.`)
+        if (!d) return
+
+        // 폴더 안의 페르소나들을 폴더 위치에 삽입
+        const personasInFolder = folder.data
+        DBState.db.personaOrder.splice(folderIndex, 1, ...personasInFolder)
+
+        selectedFolder = null
+        openFolderPopover = null
+    }
+
+    // 폴더 이름 업데이트 함수
+    function updateFolderName(folderId: string, newName: string) {
+        const folderIndex = getFolderIndex(folderId)
+        if (folderIndex === -1) return
+
+        const folder = DBState.db.personaOrder[folderIndex] as any
+        folder.name = newName
+        DBState.db.personaOrder[folderIndex] = folder
+        DBState.db.personaOrder = [...DBState.db.personaOrder]
+    }
+
+    // 그리드 컨테이너에 드롭 (빈 공간에 드롭 시 맨 끝에 추가)
+    const containerDrop = (e: DragEvent) => {
+        e.preventDefault()
+        dragHoverIndex = -1
+        dragHoverZone = null
+
+        // 폴더에서 드래그한 페르소나만 처리 (빈 공간에 드롭)
+        if (currentDrag && currentDrag.folder) {
+            // 맨 끝에 추가
+            inserter(currentDrag, {index: personaImages.length})
+        }
+    }
+
+    const containerDragOver = (e: DragEvent) => {
+        // 폴더에서 드래그한 경우만 허용
+        if (currentDrag && currentDrag.folder) {
+            e.preventDefault()
+            e.dataTransfer!.dropEffect = 'move'
+        }
+    }
+
     $effect(() => {
         let newPersonaImages: personaType[] = [];
         const idObject = getPersonaIndexObject()
@@ -291,7 +358,9 @@
 </script>
 <h2 class="mb-2 text-2xl font-bold mt-2">{language.persona}</h2>
 
-<div class="p-4 rounded-md border-darkborderc border mb-2 flex-wrap flex gap-2 w-full max-w-full min-w-0" bind:this={ele}>
+<div class="p-4 rounded-md border-darkborderc border mb-2 flex-wrap flex gap-2 w-full max-w-full min-w-0" bind:this={ele}
+    ondragover={containerDragOver}
+    ondrop={containerDrop}>
     {#each personaImages as persona, ind}
         <!-- Persona container with drag -->
         <div role="listitem"
@@ -306,9 +375,11 @@
             {#if persona.type === 'normal'}
                 <!-- svelte-ignore a11y_no_static_element_interactions -->
                 <div role="button" tabindex="0" onclick={() => {
+                    selectedFolder = null
                     changeUserPersona(persona.index)
                 }} onkeydown={(e) => {
                     if (e.key === "Enter") {
+                        selectedFolder = null
                         changeUserPersona(persona.index)
                     }
                 }}>
@@ -347,15 +418,6 @@
                     // 화면 경계 체크 (최대값이 최소값보다 작을 수 있으므로 Math.max로 보정)
                     const maxLeft = Math.max(PADDING, window.innerWidth - estimatedPopoverWidth - PADDING)
                     left = Math.max(PADDING, Math.min(left, maxLeft))
-
-                    console.log('Folder click debug:', {
-                        windowWidth: window.innerWidth,
-                        folderRect: { left: rect.left, width: rect.width, center: rect.left + rect.width / 2 },
-                        estimatedPopoverWidth,
-                        calculatedLeft: rect.left + rect.width / 2 - estimatedPopoverWidth / 2,
-                        maxLeft,
-                        finalLeft: left
-                    })
 
                     openFolderPopover = {
                         id: persona.id,
@@ -444,90 +506,132 @@
             style:left={`${openFolderPopover.left}px`}
             style:top={`${openFolderPopover.y}px`}
             style:transform={openFolderPopover.above ? "translateY(-100%)" : "none"}>
-            {#each folderData.folder as persona}
-                <!-- svelte-ignore a11y_no_static_element_interactions -->
-                <div role="button" tabindex="0" onclick={() => {
-                    changeUserPersona(persona.index)
-                    selectedFolder = null
-                    openFolderPopover = null
-                }} onkeydown={(e) => {
-                    if (e.key === "Enter") {
-                        changeUserPersona(persona.index)
+            {#each folderData.folder as persona, folderInd}
+                <div
+                    class="relative cursor-grab active:cursor-grabbing select-none"
+                    draggable="true"
+                    ondragstart={(e) => {personaDragStart({index: folderInd, folder: openFolderPopover.id}, e)}}
+                >
+                    <!-- svelte-ignore a11y_no_static_element_interactions -->
+                    <div role="button" tabindex="0" onclick={() => {
                         selectedFolder = null
                         openFolderPopover = null
-                    }
-                }}>
-                    {#if persona.icon === ''}
-                        <div class="rounded-md h-16 w-16 shadow-lg bg-textcolor2 cursor-pointer hover:ring hover:ring-green-500" class:ring={persona.index === DBState.db.selectedPersona}></div>
-                    {:else}
-                        {#await getCharImage(persona.icon, 'css')}
+                        changeUserPersona(persona.index)
+                    }} onkeydown={(e) => {
+                        if (e.key === "Enter") {
+                            selectedFolder = null
+                            openFolderPopover = null
+                            changeUserPersona(persona.index)
+                        }
+                    }}>
+                        {#if persona.icon === ''}
                             <div class="rounded-md h-16 w-16 shadow-lg bg-textcolor2 cursor-pointer hover:ring hover:ring-green-500" class:ring={persona.index === DBState.db.selectedPersona}></div>
-                        {:then im}
-                            <div class="rounded-md h-16 w-16 shadow-lg bg-textcolor2 cursor-pointer hover:ring hover:ring-green-500" style={im} class:ring={persona.index === DBState.db.selectedPersona}></div>
-                        {/await}
-                    {/if}
+                        {:else}
+                            {#await getCharImage(persona.icon, 'css')}
+                                <div class="rounded-md h-16 w-16 shadow-lg bg-textcolor2 cursor-pointer hover:ring hover:ring-green-500" class:ring={persona.index === DBState.db.selectedPersona}></div>
+                            {:then im}
+                                <div class="rounded-md h-16 w-16 shadow-lg bg-textcolor2 cursor-pointer hover:ring hover:ring-green-500" style={im} class:ring={persona.index === DBState.db.selectedPersona}></div>
+                            {/await}
+                        {/if}
+                    </div>
                 </div>
             {/each}
         </div>
     {/if}
 {/if}
 
-<div class="flex w-full items-starts rounded-md border-darkborderc border p-4 max-w-full flex-wrap">
-    <div class="flex flex-col mt-4 mr-4">
-        <button onclick={() => {selectUserImg()}}>
-            {#if DBState.db.userIcon === ''}
-                <div class="rounded-md h-28 w-28 shadow-lg bg-textcolor2 cursor-pointer hover:text-green-500"></div>
-            {:else}
-                {#await getCharImage(DBState.db.userIcon, DBState.db.personas[DBState.db.selectedPersona].largePortrait ? 'lgcss' : 'css')}
+{#if selectedFolder}
+    <!-- Folder Settings UI -->
+    {@const folderData = personaImages.find(p => p.type === 'folder' && p.id === selectedFolder)}
+    {@const folderIndex = getFolderIndex(selectedFolder)}
+    {@const folderObj = folderIndex !== -1 ? DBState.db.personaOrder[folderIndex] : null}
+    {#if folderData && folderData.type === 'folder' && folderObj && typeof folderObj !== 'string'}
+        <div class="flex w-full items-starts rounded-md border-darkborderc border p-4 max-w-full flex-wrap">
+            <div class="flex flex-col mt-4 mr-4">
+                <button onclick={() => {selectFolderImg(selectedFolder)}}>
+                    {#if !folderData.icon}
+                        <div class="rounded-md h-28 w-28 shadow-lg bg-textcolor2 cursor-pointer hover:text-green-500 flex items-center justify-center">
+                            <svg viewBox="0 0 24 24" width="3em" height="3em">
+                                <path fill="currentColor" d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
+                            </svg>
+                        </div>
+                    {:else}
+                        {#await getCharImage(folderData.icon, 'css')}
+                            <div class="rounded-md h-28 w-28 shadow-lg bg-textcolor2 cursor-pointer hover:text-green-500"></div>
+                        {:then im}
+                            <div class="rounded-md h-28 w-28 shadow-lg bg-textcolor2 cursor-pointer hover:text-green-500" style={im}></div>
+                        {/await}
+                    {/if}
+                </button>
+            </div>
+            <div class="flex flex-grow flex-col p-2 max-w-full">
+                <span class="text-sm text-textcolor2">{language.name}</span>
+                <TextInput marginBottom size="lg" placeholder="Folder Name" value={folderObj.name} onchange={(e) => updateFolderName(selectedFolder, e.currentTarget.value)}/>
+                <div class="flex gap-2 mt-4 max-w-full flex-wrap">
+                    <Button styled="danger" onclick={() => deleteFolder(selectedFolder)}>{language.remove}</Button>
+                </div>
+            </div>
+        </div>
+    {/if}
+{:else}
+    <!-- Persona Settings UI -->
+    <div class="flex w-full items-starts rounded-md border-darkborderc border p-4 max-w-full flex-wrap">
+        <div class="flex flex-col mt-4 mr-4">
+            <button onclick={() => {selectUserImg()}}>
+                {#if DBState.db.userIcon === ''}
                     <div class="rounded-md h-28 w-28 shadow-lg bg-textcolor2 cursor-pointer hover:text-green-500"></div>
-                {:then im} 
-                    <div class="rounded-md h-28 w-28 shadow-lg bg-textcolor2 cursor-pointer hover:text-green-500" style={im}></div>                
-                {/await}
+                {:else}
+                    {#await getCharImage(DBState.db.userIcon, DBState.db.personas[DBState.db.selectedPersona].largePortrait ? 'lgcss' : 'css')}
+                        <div class="rounded-md h-28 w-28 shadow-lg bg-textcolor2 cursor-pointer hover:text-green-500"></div>
+                    {:then im}
+                        <div class="rounded-md h-28 w-28 shadow-lg bg-textcolor2 cursor-pointer hover:text-green-500" style={im}></div>
+                    {/await}
+                {/if}
+            </button>
+        </div>
+        <div class="flex flex-grow flex-col p-2 max-w-full">
+            <span class="text-sm text-textcolor2">{language.name}</span>
+            <TextInput marginBottom size="lg" placeholder="User" bind:value={DBState.db.username}/>
+            <span class="text-sm text-textcolor2">{language.note}</span>
+            {#if DBState.db.personaNote}
+                <TextInput marginBottom size="lg" bind:value={DBState.db.userNote} placeholder={`Put a unique identifier for this persona here.\nExample: [Alternate Hunters persona]`} />
             {/if}
-        </button>
-    </div>
-    <div class="flex flex-grow flex-col p-2 max-w-full">
-        <span class="text-sm text-textcolor2">{language.name}</span>
-        <TextInput marginBottom size="lg" placeholder="User" bind:value={DBState.db.username}/>
-        <span class="text-sm text-textcolor2">{language.note}</span>
-        {#if DBState.db.personaNote}
-            <TextInput marginBottom size="lg" bind:value={DBState.db.userNote} placeholder={`Put a unique identifier for this persona here.\nExample: [Alternate Hunters persona]`} />
-        {/if}
-        <span class="text-sm text-textcolor2">{language.description}</span>
-        <TextAreaInput autocomplete="off" bind:value={DBState.db.personaPrompt} placeholder={`Put the description of this persona here.\nExample: [<user> is a 20 year old girl.]`} />
-        <div class="flex gap-2 mt-4 max-w-full flex-wrap">
-            <Button onclick={exportUserPersona}>{language.export}</Button>
-            <Button onclick={importUserPersona}>{language.import}</Button>
+            <span class="text-sm text-textcolor2">{language.description}</span>
+            <TextAreaInput autocomplete="off" bind:value={DBState.db.personaPrompt} placeholder={`Put the description of this persona here.\nExample: [<user> is a 20 year old girl.]`} />
+            <div class="flex gap-2 mt-4 max-w-full flex-wrap">
+                <Button onclick={exportUserPersona}>{language.export}</Button>
+                <Button onclick={importUserPersona}>{language.import}</Button>
 
-            <Button styled="danger" onclick={async () => {
-                if(DBState.db.personas.length === 1){
-                    return
-                }
-                const d = await alertConfirm(`${language.removeConfirm}${DBState.db.personas[DBState.db.selectedPersona].name}`)
-                if(d){
-                    saveUserPersona()
-                    const personaId = DBState.db.personas[DBState.db.selectedPersona].id
-                    let personas = DBState.db.personas
-                    personas.splice(DBState.db.selectedPersona, 1)
-                    DBState.db.personas = personas
+                <Button styled="danger" onclick={async () => {
+                    if(DBState.db.personas.length === 1){
+                        return
+                    }
+                    const d = await alertConfirm(`${language.removeConfirm}${DBState.db.personas[DBState.db.selectedPersona].name}`)
+                    if(d){
+                        saveUserPersona()
+                        const personaId = DBState.db.personas[DBState.db.selectedPersona].id
+                        let personas = DBState.db.personas
+                        personas.splice(DBState.db.selectedPersona, 1)
+                        DBState.db.personas = personas
 
-                    // Remove from personaOrder
-                    DBState.db.personaOrder = DBState.db.personaOrder.filter(item => {
-                        if(typeof item === 'string'){
-                            return item !== personaId
-                        }
-                        // If it's a folder, remove the persona from the folder's data array
-                        if(item.data){
-                            item.data = item.data.filter(id => id !== personaId)
-                            return item.data.length > 0 // Remove empty folders
-                        }
-                        return true
-                    })
+                        // Remove from personaOrder
+                        DBState.db.personaOrder = DBState.db.personaOrder.filter(item => {
+                            if(typeof item === 'string'){
+                                return item !== personaId
+                            }
+                            // If it's a folder, remove the persona from the folder's data array
+                            if(item.data){
+                                item.data = item.data.filter(id => id !== personaId)
+                                return item.data.length > 0 // Remove empty folders
+                            }
+                            return true
+                        })
 
-                    changeUserPersona(0, 'noSave')
-                }
-            }}>{language.remove}</Button>
-            <Check bind:check={DBState.db.personas[DBState.db.selectedPersona].largePortrait}>{language.largePortrait}</Check>
+                        changeUserPersona(0, 'noSave')
+                    }
+                }}>{language.remove}</Button>
+                <Check bind:check={DBState.db.personas[DBState.db.selectedPersona].largePortrait}>{language.largePortrait}</Check>
+            </div>
         </div>
     </div>
-</div>
+{/if}
