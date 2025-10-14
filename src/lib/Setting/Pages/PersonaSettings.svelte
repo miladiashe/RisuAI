@@ -37,6 +37,7 @@
     let currentDrag: DragData = $state(null)
 
     const personaDragStart = (ind:DragData, e:DragEv) => {
+        console.log('personaDragStart called', ind, e.target, e.currentTarget)
         e.dataTransfer.setData('text/plain', '');
         currentDrag = ind
         const avatar = e.currentTarget.querySelector('[role="button"]')
@@ -46,11 +47,13 @@
     }
 
     const personaDragOver = (e:DragEv) => {
+        console.log('personaDragOver called')
         e.preventDefault()
         e.dataTransfer.dropEffect = 'move'
     }
 
     const personaDrop = (ind:DragData, e:DragEv) => {
+        console.log('personaDrop called', ind)
         e.preventDefault()
         try {
             if(currentDrag){
@@ -269,6 +272,7 @@
     {#each personaImages as persona, ind}
         <!-- Persona container with drag -->
         <div role="listitem"
+            class="relative cursor-grab active:cursor-grabbing select-none"
             draggable="true"
             ondragstart={(e) => {personaDragStart({index:ind}, e)}}
             ondragover={personaDragOver}
