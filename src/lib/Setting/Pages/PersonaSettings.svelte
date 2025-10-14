@@ -293,12 +293,10 @@
     {#each personaImages as persona, ind}
         <!-- Persona container with drag -->
         <div role="listitem"
-            class="relative cursor-grab active:cursor-grabbing select-none"
-            class:border-l-4={dragHoverIndex === ind && dragHoverZone === 'left'}
-            class:border-r-4={dragHoverIndex === ind && dragHoverZone === 'right'}
-            class:border-4={dragHoverIndex === ind && dragHoverZone === 'center'}
-            class:border-green-500={dragHoverIndex === ind && (dragHoverZone === 'left' || dragHoverZone === 'right')}
-            class:border-blue-500={dragHoverIndex === ind && dragHoverZone === 'center'}
+            class="relative cursor-grab active:cursor-grabbing select-none rounded-md"
+            style:box-shadow={dragHoverIndex === ind && dragHoverZone === 'left' ? 'inset 4px 0 0 0 rgb(34 197 94)' :
+                              dragHoverIndex === ind && dragHoverZone === 'right' ? 'inset -4px 0 0 0 rgb(34 197 94)' :
+                              dragHoverIndex === ind && dragHoverZone === 'center' ? 'inset 0 0 0 4px rgb(59 130 246)' : 'none'}
             draggable="true"
             ondragstart={(e) => {personaDragStart({index:ind}, e)}}
             ondragover={(e) => {personaDragOver({index:ind}, e)}}
