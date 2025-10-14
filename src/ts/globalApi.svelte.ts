@@ -517,7 +517,7 @@ async function getDbBackups() {
             }
         }
         backups.sort((a, b) => b - a)
-        while(backups.length > 20){
+        while(backups.length > 500){
             const last = backups.pop()
             await remove(`database/dbbackup-${last}.bin`,{baseDir: BaseDirectory.AppData})
         }
