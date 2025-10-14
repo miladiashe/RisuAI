@@ -276,8 +276,13 @@
             ondragenter={preventAll}
         >
             {#if persona.type === 'normal'}
-                <button onclick={() => {
+                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                <div role="button" tabindex="0" onclick={() => {
                     changeUserPersona(persona.index)
+                }} onkeydown={(e) => {
+                    if (e.key === "Enter") {
+                        changeUserPersona(persona.index)
+                    }
                 }}>
                     {#if persona.icon === ''}
                         <div class="rounded-md h-20 w-20 shadow-lg bg-textcolor2 cursor-pointer hover:text-green-500" class:ring={persona.index === DBState.db.selectedPersona}></div>
@@ -288,15 +293,20 @@
                             <div class="rounded-md h-20 w-20 shadow-lg bg-textcolor2 cursor-pointer hover:text-green-500" style={im} class:ring={persona.index === DBState.db.selectedPersona}></div>
                         {/await}
                     {/if}
-                </button>
+                </div>
             {:else if persona.type === 'folder'}
-                <button onclick={() => {
+                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                <div role="button" tabindex="0" onclick={() => {
                     // TODO: Open folder popup/modal
+                }} onkeydown={(e) => {
+                    if (e.key === "Enter") {
+                        // TODO: Open folder popup/modal
+                    }
                 }} class="rounded-md h-20 w-20 shadow-lg bg-textcolor2 cursor-pointer hover:text-green-500 flex items-center justify-center">
                     <svg viewBox="0 0 24 24" width="2em" height="2em">
                         <path fill="currentColor" d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
                     </svg>
-                </button>
+                </div>
             {/if}
         </div>
     {/each}
