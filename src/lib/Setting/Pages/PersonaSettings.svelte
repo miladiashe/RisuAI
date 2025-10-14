@@ -136,7 +136,8 @@
                 db.personaOrder.splice(mainIndex.index, 1)
             }
         }
-        setDatabase(db)
+        DBState.db.personaOrder = db.personaOrder
+        checkPersonaOrder()
     }
 
     const inserter = (mainIndex:DragData, targetIndex:DragData) => {
