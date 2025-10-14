@@ -37,6 +37,8 @@
     let currentDrag: DragData = $state(null)
     let dragHoverIndex: number = $state(-1)
     let dragHoverZone: 'left' | 'center' | 'right' | null = $state(null)
+    let selectedFolder: string | null = $state(null)
+    let openFolderPopover: {id: string, x: number, y: number} | null = $state(null)
 
     const getDropZone = (relativeX: number): 'left' | 'center' | 'right' => {
         if(relativeX < DROP_ZONE_LEFT_THRESHOLD) return 'left'
@@ -331,11 +333,23 @@
                 </div>
             {:else if persona.type === 'folder'}
                 <!-- svelte-ignore a11y_no_static_element_interactions -->
-                <div role="button" tabindex="0" onclick={() => {
-                    // TODO: Open folder popup/modal
+                <div role="button" tabindex="0" onclick={(e) => {
+                    selectedFolder = persona.id
+                    const rect = e.currentTarget.getBoundingClientRect()
+                    openFolderPopover = {
+                        id: persona.id,
+                        x: rect.left + rect.width / 2,
+                        y: rect.bottom + 8
+                    }
                 }} onkeydown={(e) => {
                     if (e.key === "Enter") {
-                        // TODO: Open folder popup/modal
+                        selectedFolder = persona.id
+                        const rect = e.currentTarget.getBoundingClientRect()
+                        openFolderPopover = {
+                            id: persona.id,
+                            x: rect.left + rect.width / 2,
+                            y: rect.bottom + 8
+                        }
                     }
                 }} class="rounded-md h-20 w-20 shadow-lg bg-textcolor2 cursor-pointer hover:text-green-500 flex items-center justify-center"
                     style:box-shadow={dragHoverIndex === ind && dragHoverZone === 'left' ? 'inset 4px 0 0 0 rgb(34 197 94)' :
@@ -380,6 +394,44 @@
         </BaseRoundedButton>
     </div>
 </div>
+
+<!-- Folder Popover -->
+{#if openFolderPopover}
+    <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+    <div class="fixed inset-0 z-40" onclick={() => {openFolderPopover = null}}></div>
+    {@const folderData = personaImages.find(p => p.type === 'folder' && p.id === openFolderPopover.id)}
+    {#if folderData && folderData.type === 'folder'}
+        <div class="fixed z-50 bg-darkbg border border-selected rounded-lg shadow-xl p-3 flex flex-wrap gap-2 max-w-md"
+            style:left={`${openFolderPopover.x}px`}
+            style:top={`${openFolderPopover.y}px`}
+            style:transform="translateX(-50%)">
+            {#each folderData.folder as persona}
+                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                <div role="button" tabindex="0" onclick={() => {
+                    changeUserPersona(persona.index)
+                    selectedFolder = null
+                    openFolderPopover = null
+                }} onkeydown={(e) => {
+                    if (e.key === "Enter") {
+                        changeUserPersona(persona.index)
+                        selectedFolder = null
+                        openFolderPopover = null
+                    }
+                }}>
+                    {#if persona.icon === ''}
+                        <div class="rounded-md h-16 w-16 shadow-lg bg-textcolor2 cursor-pointer hover:ring hover:ring-green-500" class:ring={persona.index === DBState.db.selectedPersona}></div>
+                    {:else}
+                        {#await getCharImage(persona.icon, 'css')}
+                            <div class="rounded-md h-16 w-16 shadow-lg bg-textcolor2 cursor-pointer hover:ring hover:ring-green-500" class:ring={persona.index === DBState.db.selectedPersona}></div>
+                        {:then im}
+                            <div class="rounded-md h-16 w-16 shadow-lg bg-textcolor2 cursor-pointer hover:ring hover:ring-green-500" style={im} class:ring={persona.index === DBState.db.selectedPersona}></div>
+                        {/await}
+                    {/if}
+                </div>
+            {/each}
+        </div>
+    {/if}
+{/if}
 
 <div class="flex w-full items-starts rounded-md border-darkborderc border p-4 max-w-full flex-wrap">
     <div class="flex flex-col mt-4 mr-4">
