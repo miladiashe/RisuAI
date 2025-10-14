@@ -61,20 +61,27 @@
                 const mouseX = e.clientX - rect.left
                 const relativeX = mouseX / rect.width // 0.0 ~ 1.0
 
+                console.log('relativeX:', relativeX, 'currentDrag:', currentDrag, 'targetIndex:', ind)
+
                 if(relativeX < DROP_ZONE_LEFT_THRESHOLD){
                     // 좌측: 왼쪽에 삽입
+                    console.log('Calling inserter (left)')
                     inserter(currentDrag, {index: ind})
                 }
                 else if(relativeX > DROP_ZONE_RIGHT_THRESHOLD){
                     // 우측: 오른쪽에 삽입
+                    console.log('Calling inserter (right)')
                     inserter(currentDrag, {index: ind + 1})
                 }
                 else{
                     // 중간: 폴더 생성
+                    console.log('Calling createFolder')
                     createFolder(currentDrag, {index: ind})
                 }
             }
-        } catch (error) {}
+        } catch (error) {
+            console.error('Error in personaDrop:', error)
+        }
     }
 
     const preventAll = (e:Event) => {
@@ -141,9 +148,12 @@
     }
 
     const inserter = (mainIndex:DragData, targetIndex:DragData) => {
+        console.log('inserter called:', mainIndex, targetIndex)
         if(mainIndex.index === targetIndex.index && mainIndex.folder === targetIndex.folder){
+            console.log('Same index, returning')
             return
         }
+        console.log('Before:', DBState.db.personaOrder)
         let db = DBState.db
         let mainFolderIndex = mainIndex.folder ? getFolderIndex(mainIndex.folder) : null
         let targetFolderIndex = targetIndex.folder ? getFolderIndex(targetIndex.folder) : null
@@ -218,10 +228,13 @@
         }
 
         DBState.db.personaOrder = db.personaOrder
+        console.log('After:', DBState.db.personaOrder)
         checkPersonaOrder()
     }
 
     $effect(() => {
+        console.log('$effect triggered, personaOrder changed')
+        console.log('Current personaOrder:', DBState.db.personaOrder)
         let newPersonaImages: personaType[] = [];
         const idObject = getPersonaIndexObject()
         for (const id of DBState.db.personaOrder) {
