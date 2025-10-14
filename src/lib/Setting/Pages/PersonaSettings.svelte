@@ -38,7 +38,7 @@
     let dragHoverIndex: number = $state(-1)
     let dragHoverZone: 'left' | 'center' | 'right' | null = $state(null)
     let selectedFolder: string | null = $state(null)
-    let openFolderPopover: {id: string, x: number, y: number} | null = $state(null)
+    let openFolderPopover: {id: string, x: number, y: number, above?: boolean} | null = $state(null)
 
     const getDropZone = (relativeX: number): 'left' | 'center' | 'right' => {
         if(relativeX < DROP_ZONE_LEFT_THRESHOLD) return 'left'
@@ -336,19 +336,29 @@
                 <div role="button" tabindex="0" onclick={(e) => {
                     selectedFolder = persona.id
                     const rect = e.currentTarget.getBoundingClientRect()
+                    const spaceBelow = window.innerHeight - rect.bottom
+                    const spaceAbove = rect.top
+                    const estimatedPopoverHeight = 200 // 대략적인 팝오버 높이
+
                     openFolderPopover = {
                         id: persona.id,
                         x: rect.left + rect.width / 2,
-                        y: rect.bottom + 8
+                        y: spaceBelow > estimatedPopoverHeight ? rect.bottom + 8 : rect.top - 8,
+                        above: spaceBelow <= estimatedPopoverHeight
                     }
                 }} onkeydown={(e) => {
                     if (e.key === "Enter") {
                         selectedFolder = persona.id
                         const rect = e.currentTarget.getBoundingClientRect()
+                        const spaceBelow = window.innerHeight - rect.bottom
+                        const spaceAbove = rect.top
+                        const estimatedPopoverHeight = 200
+
                         openFolderPopover = {
                             id: persona.id,
                             x: rect.left + rect.width / 2,
-                            y: rect.bottom + 8
+                            y: spaceBelow > estimatedPopoverHeight ? rect.bottom + 8 : rect.top - 8,
+                            above: spaceBelow <= estimatedPopoverHeight
                         }
                     }
                 }} class="rounded-md h-20 w-20 shadow-lg bg-textcolor2 cursor-pointer hover:text-green-500 flex items-center justify-center"
@@ -397,14 +407,20 @@
 
 <!-- Folder Popover -->
 {#if openFolderPopover}
-    <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-    <div class="fixed inset-0 z-40" onclick={() => {openFolderPopover = null}}></div>
+    <!-- svelte-ignore a11y_click_events_have_key_keys a11y_no_static_element_interactions -->
+    <div class="fixed inset-0 z-40 pointer-events-none"></div>
     {@const folderData = personaImages.find(p => p.type === 'folder' && p.id === openFolderPopover.id)}
     {#if folderData && folderData.type === 'folder'}
-        <div class="fixed z-50 bg-darkbg border border-selected rounded-lg shadow-xl p-3 flex flex-wrap gap-2 max-w-md"
+        <!-- svelte-ignore a11y_click_events_have_key_keys a11y_no_static_element_interactions -->
+        <div class="fixed inset-0 z-40" onclick={(e) => {
+            if(e.target === e.currentTarget) {
+                openFolderPopover = null
+            }
+        }}></div>
+        <div class="fixed z-50 bg-darkbg border border-selected rounded-lg shadow-xl p-3 flex flex-wrap gap-2 max-w-md pointer-events-auto"
             style:left={`${openFolderPopover.x}px`}
             style:top={`${openFolderPopover.y}px`}
-            style:transform="translateX(-50%)">
+            style:transform={openFolderPopover.above ? "translate(-50%, -100%)" : "translateX(-50%)"}>
             {#each folderData.folder as persona}
                 <!-- svelte-ignore a11y_no_static_element_interactions -->
                 <div role="button" tabindex="0" onclick={() => {
