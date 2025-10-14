@@ -440,17 +440,6 @@
             }
         }}></div>
         <div
-            use:((el) => {
-                setTimeout(() => {
-                    const rect = el.getBoundingClientRect()
-                    console.log('Popover actual size and position:', {
-                        width: rect.width,
-                        left: rect.left,
-                        right: rect.right,
-                        calculatedLeft: openFolderPopover.left
-                    })
-                }, 0)
-            })
             class="fixed z-50 bg-darkbg border border-selected rounded-lg shadow-xl p-3 flex flex-wrap gap-2 max-w-[min(448px,calc(100vw-32px))] pointer-events-auto"
             style:left={`${openFolderPopover.left}px`}
             style:top={`${openFolderPopover.y}px`}
