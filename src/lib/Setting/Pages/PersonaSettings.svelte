@@ -40,6 +40,7 @@
     let dragHoverZone: 'left' | 'center' | 'right' | null = $state(null)
     let selectedFolder: string | null = $state(null)
     let openFolderPopover: {id: string, left: number, y: number, above?: boolean} | null = $state(null)
+    let popoverElement: HTMLDivElement | null = $state(null)
 
     const getDropZone = (relativeX: number): 'left' | 'center' | 'right' => {
         if(relativeX < DROP_ZONE_LEFT_THRESHOLD) return 'left'
@@ -291,14 +292,12 @@
 
     // 그리드 컨테이너에 드롭 (빈 공간에 드롭 시 맨 끝에 추가)
     const containerDrop = (e: DragEvent) => {
-        console.log('containerDrop', currentDrag)
         e.preventDefault()
         dragHoverIndex = -1
         dragHoverZone = null
 
         // 폴더에서 드래그한 페르소나만 처리 (빈 공간에 드롭)
         if (currentDrag && currentDrag.folder) {
-            console.log('Dropping from folder to container end')
             // 맨 끝에 추가
             inserter(currentDrag, {index: personaImages.length})
         }
@@ -311,6 +310,46 @@
             e.dataTransfer!.dropEffect = 'move'
         }
     }
+
+    // 팝오버 위치 재조정 (실제 렌더링된 너비 기준)
+    $effect(() => {
+        if (!openFolderPopover) {
+            popoverElement = null
+            return
+        }
+
+        if (popoverElement && openFolderPopover) {
+            const rect = popoverElement.getBoundingClientRect()
+            const actualWidth = rect.width
+            const PADDING = 16
+
+            // 팝오버를 연 폴더의 위치를 찾아야 함
+            const folderData = personaImages.find(p => p.type === 'folder' && p.id === openFolderPopover.id)
+            if (folderData) {
+                const folderIndex = personaImages.indexOf(folderData)
+                const folderElements = document.querySelectorAll('[role="listitem"]')
+                const folderElement = folderElements[folderIndex] as HTMLElement
+                if (folderElement) {
+                    const folderRect = folderElement.getBoundingClientRect()
+
+                    // 폴더 중심에서 팝오버 절반만큼 왼쪽으로
+                    let left = folderRect.left + folderRect.width / 2 - actualWidth / 2
+
+                    // 화면 경계 체크
+                    const maxLeft = window.innerWidth - actualWidth - PADDING
+                    left = Math.max(PADDING, Math.min(left, maxLeft))
+
+                    // 위치가 달라졌으면 업데이트
+                    if (Math.abs(left - openFolderPopover.left) > 1) {
+                        openFolderPopover = {
+                            ...openFolderPopover,
+                            left: left
+                        }
+                    }
+                }
+            }
+        }
+    })
 
     $effect(() => {
         let newPersonaImages: personaType[] = [];
@@ -504,6 +543,7 @@
             }
         }}></div>
         <div
+            bind:this={popoverElement}
             class="fixed z-50 bg-darkbg border border-selected rounded-lg shadow-xl p-3 flex flex-wrap gap-2 max-w-[min(448px,calc(100vw-32px))] pointer-events-auto"
             style:left={`${openFolderPopover.left}px`}
             style:top={`${openFolderPopover.y}px`}
