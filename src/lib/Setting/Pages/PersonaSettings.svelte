@@ -512,7 +512,13 @@
                 <div
                     class="relative cursor-grab active:cursor-grabbing select-none"
                     draggable="true"
-                    ondragstart={(e) => {personaDragStart({index: folderInd, folder: openFolderPopover.id}, e)}}
+                    ondragstart={(e) => {
+                        personaDragStart({index: folderInd, folder: openFolderPopover.id}, e)
+                        // 드래그 시작 시 팝오버를 닫아서 드롭이 가능하게 함
+                        setTimeout(() => {
+                            openFolderPopover = null
+                        }, 0)
+                    }}
                 >
                     <!-- svelte-ignore a11y_no_static_element_interactions -->
                     <div role="button" tabindex="0" onclick={() => {
