@@ -338,13 +338,24 @@
                     const rect = e.currentTarget.getBoundingClientRect()
                     const spaceBelow = window.innerHeight - rect.bottom
                     const estimatedPopoverHeight = 200
-                    const estimatedPopoverWidth = 400
                     const PADDING = 16
+                    // max-w-md = 28rem = 448px, max-w-[calc(100vw-32px)]
+                    const estimatedPopoverWidth = Math.min(448, window.innerWidth - 32)
 
                     // 폴더 중심에서 팝오버 절반만큼 왼쪽으로 이동
                     let left = rect.left + rect.width / 2 - estimatedPopoverWidth / 2
-                    // 화면 경계 체크
-                    left = Math.max(PADDING, Math.min(left, window.innerWidth - estimatedPopoverWidth - PADDING))
+                    // 화면 경계 체크 (최대값이 최소값보다 작을 수 있으므로 Math.max로 보정)
+                    const maxLeft = Math.max(PADDING, window.innerWidth - estimatedPopoverWidth - PADDING)
+                    left = Math.max(PADDING, Math.min(left, maxLeft))
+
+                    console.log('Folder click debug:', {
+                        windowWidth: window.innerWidth,
+                        folderRect: { left: rect.left, width: rect.width, center: rect.left + rect.width / 2 },
+                        estimatedPopoverWidth,
+                        calculatedLeft: rect.left + rect.width / 2 - estimatedPopoverWidth / 2,
+                        maxLeft,
+                        finalLeft: left
+                    })
 
                     openFolderPopover = {
                         id: persona.id,
@@ -358,11 +369,12 @@
                         const rect = e.currentTarget.getBoundingClientRect()
                         const spaceBelow = window.innerHeight - rect.bottom
                         const estimatedPopoverHeight = 200
-                        const estimatedPopoverWidth = 400
                         const PADDING = 16
+                        const estimatedPopoverWidth = Math.min(448, window.innerWidth - 32)
 
                         let left = rect.left + rect.width / 2 - estimatedPopoverWidth / 2
-                        left = Math.max(PADDING, Math.min(left, window.innerWidth - estimatedPopoverWidth - PADDING))
+                        const maxLeft = Math.max(PADDING, window.innerWidth - estimatedPopoverWidth - PADDING)
+                        left = Math.max(PADDING, Math.min(left, maxLeft))
 
                         openFolderPopover = {
                             id: persona.id,
@@ -427,7 +439,21 @@
                 openFolderPopover = null
             }
         }}></div>
-        <div class="fixed z-50 bg-darkbg border border-selected rounded-lg shadow-xl p-3 flex flex-wrap gap-2 max-w-md max-w-[calc(100vw-32px)] pointer-events-auto"
+        <div
+            bind:this={(el) => {
+                if(el) {
+                    setTimeout(() => {
+                        const rect = el.getBoundingClientRect()
+                        console.log('Popover actual size and position:', {
+                            width: rect.width,
+                            left: rect.left,
+                            right: rect.right,
+                            calculatedLeft: openFolderPopover.left
+                        })
+                    }, 0)
+                }
+            }}
+            class="fixed z-50 bg-darkbg border border-selected rounded-lg shadow-xl p-3 flex flex-wrap gap-2 max-w-[min(448px,calc(100vw-32px))] pointer-events-auto"
             style:left={`${openFolderPopover.left}px`}
             style:top={`${openFolderPopover.y}px`}
             style:transform={openFolderPopover.above ? "translateY(-100%)" : "none"}>
