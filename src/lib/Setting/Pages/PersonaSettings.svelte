@@ -39,7 +39,7 @@
     const personaDragStart = (ind:DragData, e:DragEv) => {
         e.dataTransfer.setData('text/plain', '');
         currentDrag = ind
-        const avatar = e.currentTarget.querySelector('button')
+        const avatar = e.currentTarget.querySelector('[role="button"]')
         if(avatar){
             e.dataTransfer.setDragImage(avatar, 10, 10);
         }
