@@ -38,7 +38,7 @@
     let dragHoverIndex: number = $state(-1)
     let dragHoverZone: 'left' | 'center' | 'right' | null = $state(null)
     let selectedFolder: string | null = $state(null)
-    let openFolderPopover: {id: string, x: number, y: number, above?: boolean} | null = $state(null)
+    let openFolderPopover: {id: string, left: number, y: number, above?: boolean} | null = $state(null)
 
     const getDropZone = (relativeX: number): 'left' | 'center' | 'right' => {
         if(relativeX < DROP_ZONE_LEFT_THRESHOLD) return 'left'
@@ -337,20 +337,18 @@
                     selectedFolder = persona.id
                     const rect = e.currentTarget.getBoundingClientRect()
                     const spaceBelow = window.innerHeight - rect.bottom
-                    const spaceAbove = rect.top
                     const estimatedPopoverHeight = 200
                     const estimatedPopoverWidth = 400
                     const PADDING = 16
 
-                    let x = rect.left + rect.width / 2
-                    // 화면 경계 체크 - 최소/최대 x 위치 제한
-                    const minX = estimatedPopoverWidth / 2 + PADDING
-                    const maxX = window.innerWidth - estimatedPopoverWidth / 2 - PADDING
-                    x = Math.max(minX, Math.min(x, maxX))
+                    // 폴더 중심에서 팝오버 절반만큼 왼쪽으로 이동
+                    let left = rect.left + rect.width / 2 - estimatedPopoverWidth / 2
+                    // 화면 경계 체크
+                    left = Math.max(PADDING, Math.min(left, window.innerWidth - estimatedPopoverWidth - PADDING))
 
                     openFolderPopover = {
                         id: persona.id,
-                        x: x,
+                        left: left,
                         y: spaceBelow > estimatedPopoverHeight ? rect.bottom + 8 : rect.top - 8,
                         above: spaceBelow <= estimatedPopoverHeight
                     }
@@ -359,19 +357,16 @@
                         selectedFolder = persona.id
                         const rect = e.currentTarget.getBoundingClientRect()
                         const spaceBelow = window.innerHeight - rect.bottom
-                        const spaceAbove = rect.top
                         const estimatedPopoverHeight = 200
                         const estimatedPopoverWidth = 400
                         const PADDING = 16
 
-                        let x = rect.left + rect.width / 2
-                        const minX = estimatedPopoverWidth / 2 + PADDING
-                        const maxX = window.innerWidth - estimatedPopoverWidth / 2 - PADDING
-                        x = Math.max(minX, Math.min(x, maxX))
+                        let left = rect.left + rect.width / 2 - estimatedPopoverWidth / 2
+                        left = Math.max(PADDING, Math.min(left, window.innerWidth - estimatedPopoverWidth - PADDING))
 
                         openFolderPopover = {
                             id: persona.id,
-                            x: x,
+                            left: left,
                             y: spaceBelow > estimatedPopoverHeight ? rect.bottom + 8 : rect.top - 8,
                             above: spaceBelow <= estimatedPopoverHeight
                         }
@@ -433,9 +428,9 @@
             }
         }}></div>
         <div class="fixed z-50 bg-darkbg border border-selected rounded-lg shadow-xl p-3 flex flex-wrap gap-2 max-w-md max-w-[calc(100vw-32px)] pointer-events-auto"
-            style:left={`${openFolderPopover.x}px`}
+            style:left={`${openFolderPopover.left}px`}
             style:top={`${openFolderPopover.y}px`}
-            style:transform={openFolderPopover.above ? "translate(-50%, -100%)" : "translateX(-50%)"}>
+            style:transform={openFolderPopover.above ? "translateY(-100%)" : "none"}>
             {#each folderData.folder as persona}
                 <!-- svelte-ignore a11y_no_static_element_interactions -->
                 <div role="button" tabindex="0" onclick={() => {
