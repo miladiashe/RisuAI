@@ -18,6 +18,11 @@
 
     let ele: HTMLDivElement = $state()
 
+    // Drag & Drop zone ratios
+    const DROP_ZONE_LEFT_THRESHOLD = 0.25  // 좌측 25%: 왼쪽에 삽입
+    const DROP_ZONE_RIGHT_THRESHOLD = 0.75 // 우측 25%: 오른쪽에 삽입
+    // 중간 50%: 폴더 생성
+
     type personaTypeNormal = { type:'normal', icon: string, index: number, name:string }
     type personaType = personaTypeNormal | {type:'folder', folder:personaTypeNormal[], id:string, name:string, color:string, icon?:string}
     let personaImages: personaType[] = $state([])
@@ -49,7 +54,22 @@
         e.preventDefault()
         try {
             if(currentDrag){
-                // TODO: createFolder(currentDrag,ind)
+                const rect = e.currentTarget.getBoundingClientRect()
+                const mouseX = e.clientX - rect.left
+                const relativeX = mouseX / rect.width // 0.0 ~ 1.0
+
+                if(relativeX < DROP_ZONE_LEFT_THRESHOLD){
+                    // 좌측: 왼쪽에 삽입
+                    inserter(currentDrag, {index: ind})
+                }
+                else if(relativeX > DROP_ZONE_RIGHT_THRESHOLD){
+                    // 우측: 오른쪽에 삽입
+                    inserter(currentDrag, {index: ind + 1})
+                }
+                else{
+                    // 중간: 폴더 생성
+                    createFolder(currentDrag, {index: ind})
+                }
             }
         } catch (error) {}
     }
@@ -68,6 +88,52 @@
             }
         }
         return -1
+    }
+
+    const createFolder = (mainIndex:DragData, targetIndex:DragData) => {
+        if(mainIndex.index === targetIndex.index && mainIndex.folder === targetIndex.folder){
+            return
+        }
+        let db = DBState.db
+        let mainFolderIndex = mainIndex.folder ? getFolderIndex(mainIndex.folder) : null
+        let mainFolder = db.personaOrder[mainFolderIndex] as any
+        if(targetIndex.folder){
+            return // 폴더 내부에는 폴더를 만들 수 없음
+        }
+        const main = mainIndex.folder ? mainFolder.data[mainIndex.index] : db.personaOrder[mainIndex.index]
+        const target = db.personaOrder[targetIndex.index]
+        if(typeof(main) !== 'string'){
+            return // 폴더는 폴더와 합칠 수 없음
+        }
+        if(typeof(target) === 'string'){
+            // 두 개의 페르소나를 합쳐서 새 폴더 생성
+            const newFolder:any = {
+                name: "New Folder",
+                data: [main, target],
+                color: "",
+                id: v4()
+            }
+            db.personaOrder[targetIndex.index] = newFolder
+            if(mainIndex.folder){
+                mainFolder.data.splice(mainIndex.index, 1)
+                db.personaOrder[mainFolderIndex] = mainFolder
+            }
+            else{
+                db.personaOrder.splice(mainIndex.index, 1)
+            }
+        }
+        else{
+            // 페르소나를 기존 폴더에 추가
+            target.data.push(main)
+            if(mainIndex.folder){
+                mainFolder.data.splice(mainIndex.index, 1)
+                db.personaOrder[mainFolderIndex] = mainFolder
+            }
+            else{
+                db.personaOrder.splice(mainIndex.index, 1)
+            }
+        }
+        setDatabase(db)
     }
 
     const inserter = (mainIndex:DragData, targetIndex:DragData) => {
@@ -200,21 +266,6 @@
 <h2 class="mb-2 text-2xl font-bold mt-2">{language.persona}</h2>
 
 <div class="p-4 rounded-md border-darkborderc border mb-2 flex-wrap flex gap-2 w-full max-w-full min-w-0" bind:this={ele}>
-    <!-- Initial drop zone -->
-    <div class="w-2 h-20" role="listitem" ondragover={(e) => {
-        e.preventDefault()
-        e.dataTransfer.dropEffect = 'move'
-        e.currentTarget.classList.add('bg-green-500')
-    }} ondragleave={(e) => {
-        e.currentTarget.classList.remove('bg-green-500')
-    }} ondrop={(e) => {
-        e.preventDefault()
-        e.currentTarget.classList.remove('bg-green-500')
-        const da = currentDrag
-        if(da){
-            inserter(da,{index:0})
-        }
-    }} ondragenter={preventAll}></div>
     {#each personaImages as persona, ind}
         <!-- Persona container with drag -->
         <div role="listitem"
@@ -248,21 +299,6 @@
                 </button>
             {/if}
         </div>
-        <!-- Drop zone after each persona -->
-        <div class="w-2 h-20" role="listitem" ondragover={((e) => {
-            e.preventDefault()
-            e.dataTransfer.dropEffect = 'move'
-            e.currentTarget.classList.add('bg-green-500')
-        })} ondragleave={(e) => {
-            e.currentTarget.classList.remove('bg-green-500')
-        }} ondrop={(e) => {
-            e.preventDefault()
-            e.currentTarget.classList.remove('bg-green-500')
-            const da = currentDrag
-            if(da){
-                inserter(da,{index:ind+1})
-            }
-        }} ondragenter={preventAll}></div>
     {/each}
     <div class="flex justify-center items-center ml-2 mr-2">
         <BaseRoundedButton
