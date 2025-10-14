@@ -291,12 +291,14 @@
 
     // 그리드 컨테이너에 드롭 (빈 공간에 드롭 시 맨 끝에 추가)
     const containerDrop = (e: DragEvent) => {
+        console.log('containerDrop', currentDrag)
         e.preventDefault()
         dragHoverIndex = -1
         dragHoverZone = null
 
         // 폴더에서 드래그한 페르소나만 처리 (빈 공간에 드롭)
         if (currentDrag && currentDrag.folder) {
+            console.log('Dropping from folder to container end')
             // 맨 끝에 추가
             inserter(currentDrag, {index: personaImages.length})
         }
