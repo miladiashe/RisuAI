@@ -12,6 +12,7 @@ import { defaultColorScheme, type ColorScheme } from '../gui/colorscheme';
 import type { PromptItem, PromptSettings } from '../process/prompt';
 import type { OobaChatCompletionRequestParams } from '../model/ooba';
 import { type HypaV3Settings, type HypaV3Preset, createHypaV3Preset } from '../process/memory/hypav3'
+import { v4 } from 'uuid'
 
 export let appVer = "166.3.0"
 export let webAppSubVer = ''
@@ -369,6 +370,16 @@ export function setDatabase(data:Database){
         note: data.userNote,
         largePortrait: false
     }]
+    // Initialize personaOrder from personas if not exists
+    if(!data.personaOrder || data.personaOrder.length === 0){
+        data.personaOrder = []
+        for(let i = 0; i < data.personas.length; i++){
+            if(!data.personas[i].id){
+                data.personas[i].id = v4()
+            }
+            data.personaOrder.push(data.personas[i].id)
+        }
+    }
     data.classicMaxWidth ??= false
     data.ooba ??= safeStructuredClone(defaultOoba)
     data.ainconfig ??= safeStructuredClone(defaultAIN)
@@ -832,6 +843,7 @@ export interface Database{
         id?:string
         note?:string
     }[]
+    personaOrder:(string|personaFolder)[]
     personaNote:boolean
     assetWidth:number
     animationSpeed:number
@@ -1466,6 +1478,15 @@ interface hordeConfig{
 }
 
 export interface folder{
+    name:string
+    data:string[]
+    color:string
+    id:string
+    imgFile?:string
+    img?:string
+}
+
+export interface personaFolder{
     name:string
     data:string[]
     color:string

@@ -8,95 +8,276 @@
     import { alertConfirm, alertSelect } from "src/ts/alert";
     import { getCharImage } from "src/ts/characters";
     import { changeUserPersona, exportUserPersona, importUserPersona, saveUserPersona, selectUserImg } from "src/ts/persona";
-    import Sortable from 'sortablejs/modular/sortable.core.esm.js';
-    import { onDestroy, onMount } from "svelte";
-    import { sleep, sortableOptions } from "src/ts/util";
     import { setDatabase } from "src/ts/storage/database.svelte";
     import { DBState } from 'src/ts/stores.svelte';
+    import { getPersonaIndexObject } from "src/ts/util";
+    import { checkPersonaOrder } from "src/ts/globalApi.svelte";
     import { get } from "svelte/store";
     import { v4 } from "uuid"
+    import { isEqual } from "lodash";
 
-    let stb: Sortable = null
     let ele: HTMLDivElement = $state()
-    let sorted = $state(0)
-    let selectedId:string = null
-    const createStb = () => {
-        stb = Sortable.create(ele, {
-            onStart: async () => {
-                DBState.db.personas[DBState.db.selectedPersona].id ??= v4()
-                selectedId = DBState.db.personas[DBState.db.selectedPersona].id
-                saveUserPersona()
-            },
-            onEnd: async () => {
-                let idx:number[] = []
-                ele.querySelectorAll('[data-risu-idx]').forEach((e, i) => {
-                    idx.push(parseInt(e.getAttribute('data-risu-idx')))
-                })
-                let newValue:{
-                    personaPrompt:string
-                    name:string
-                    icon:string
-                    note?:string
-                    largePortrait?:boolean
-                    id?:string
-                }[] = []
-                idx.forEach((i) => {
-                    newValue.push(DBState.db.personas[i])
-                })
-                DBState.db.personas = newValue
-                const selectedPersona = DBState.db.personas.findIndex((e) => e.id === selectedId)
-                changeUserPersona(selectedPersona !== -1 ? selectedPersona : 0, 'noSave')
-                try {
-                    stb.destroy()
-                } catch (error) {}
-                sorted += 1
-                await sleep(1)
-                createStb()
-            },
-            ...sortableOptions
-        })
+
+    type personaTypeNormal = { type:'normal', icon: string, index: number, name:string }
+    type personaType = personaTypeNormal | {type:'folder', folder:personaTypeNormal[], id:string, name:string, color:string, icon?:string}
+    let personaImages: personaType[] = $state([])
+
+    type DragData = {
+        index:number,
+        folder?:string
+    }
+    type DragEv = DragEvent & {
+        currentTarget: EventTarget & HTMLDivElement;
+    }
+    let currentDrag: DragData = $state(null)
+
+    const personaDragStart = (ind:DragData, e:DragEv) => {
+        e.dataTransfer.setData('text/plain', '');
+        currentDrag = ind
+        const avatar = e.currentTarget.querySelector('button')
+        if(avatar){
+            e.dataTransfer.setDragImage(avatar, 10, 10);
+        }
     }
 
-    onMount(createStb)
+    const personaDragOver = (e:DragEv) => {
+        e.preventDefault()
+        e.dataTransfer.dropEffect = 'move'
+    }
 
-    onDestroy(() => {
-        if(stb){
-            try {
-                stb.destroy()
-            } catch (error) {}
+    const personaDrop = (ind:DragData, e:DragEv) => {
+        e.preventDefault()
+        try {
+            if(currentDrag){
+                // TODO: createFolder(currentDrag,ind)
+            }
+        } catch (error) {}
+    }
+
+    const preventAll = (e:Event) => {
+        e.preventDefault()
+        e.stopPropagation()
+        return false
+    }
+
+    function getFolderIndex(id:string){
+        for(let i=0;i<DBState.db.personaOrder.length;i++){
+            const data = DBState.db.personaOrder[i]
+            if(typeof(data) !== 'string' && data.id === id){
+                return i
+            }
+        }
+        return -1
+    }
+
+    const inserter = (mainIndex:DragData, targetIndex:DragData) => {
+        if(mainIndex.index === targetIndex.index && mainIndex.folder === targetIndex.folder){
+            return
+        }
+        let db = DBState.db
+        let mainFolderIndex = mainIndex.folder ? getFolderIndex(mainIndex.folder) : null
+        let targetFolderIndex = targetIndex.folder ? getFolderIndex(targetIndex.folder) : null
+        let mainFolderId = mainIndex.folder ? (db.personaOrder[mainFolderIndex] as any).id : ''
+        let movingFolder:any|false = false
+        let mainId = ''
+        if(mainIndex.folder){
+            mainId = (db.personaOrder[mainFolderIndex] as any).data[mainIndex.index]
+        }
+        else{
+            const da = db.personaOrder[mainIndex.index]
+            if(typeof(da) !== 'string'){
+                mainId = da.id
+                movingFolder = safeStructuredClone($state.snapshot(da))
+                if(targetIndex.folder){
+                    return
+                }
+            }
+            else{
+                mainId = da
+            }
+        }
+        if(targetIndex.folder){
+            const folder = db.personaOrder[targetFolderIndex] as any
+            folder.data.splice(targetIndex.index,0,mainId)
+            db.personaOrder[targetFolderIndex] = folder
+        }
+        else if(movingFolder){
+            db.personaOrder.splice(targetIndex.index,0,movingFolder)
+        }
+        else{
+            db.personaOrder.splice(targetIndex.index,0,mainId)
+        }
+        if(mainIndex.folder){
+            mainFolderIndex = -1
+            for(let i=0;i<db.personaOrder.length;i++){
+                const a =db.personaOrder[i]
+                if(typeof(a) !== 'string'){
+                    if(a.id === mainFolderId){
+                        mainFolderIndex = i
+                        break
+                    }
+                }
+            }
+            if(mainFolderIndex !== -1){
+                const folder:any = db.personaOrder[mainFolderIndex] as any
+                const ind = mainIndex.index > targetIndex.index ? folder.data.lastIndexOf(mainId) : folder.data.indexOf(mainId)
+                if(ind !== -1){
+                    folder.data.splice(ind, 1)
+                }
+                db.personaOrder[mainFolderIndex] = folder
+            }
+            else{
+                console.log('folder not found')
+            }
+        }
+        else if(movingFolder){
+            let idList:string[] = []
+            for(const ord of db.personaOrder){
+                idList.push(typeof(ord) === 'string' ? ord : ord.id)
+            }
+            const ind = mainIndex.index > targetIndex.index ? idList.lastIndexOf(mainId) : idList.indexOf(mainId)
+            if(ind !== -1){
+                db.personaOrder.splice(ind, 1)
+            }
+        }
+        else{
+            const ind = mainIndex.index > targetIndex.index ? db.personaOrder.lastIndexOf(mainId) : db.personaOrder.indexOf(mainId)
+            if(ind !== -1){
+                db.personaOrder.splice(ind, 1)
+            }
+        }
+
+        DBState.db.personaOrder = db.personaOrder
+        checkPersonaOrder()
+    }
+
+    $effect(() => {
+        let newPersonaImages: personaType[] = [];
+        const idObject = getPersonaIndexObject()
+        for (const id of DBState.db.personaOrder) {
+          if(typeof(id) === 'string'){
+            const index = idObject[id] ?? -1
+            if(index !== -1){
+              const persona = DBState.db.personas[index]
+              newPersonaImages.push({
+                icon:persona.icon ?? "",
+                index:index,
+                type: "normal",
+                name: persona.name
+              });
+            }
+          }
+          else{
+            const folder = id
+            let folderPersonaImages: personaTypeNormal[] = []
+            for(const id of folder.data){
+              const index = idObject[id] ?? -1
+              if(index !== -1){
+                const persona = DBState.db.personas[index]
+                folderPersonaImages.push({
+                  icon:persona.icon ?? "",
+                  index:index,
+                  type: "normal",
+                  name: persona.name
+                });
+              }
+            }
+            newPersonaImages.push({
+              folder: folderPersonaImages,
+              type: "folder",
+              id: folder.id,
+              name: folder.name,
+              color: folder.color,
+              icon: folder.img,
+            });
+          }
+        }
+        if (!isEqual(personaImages, newPersonaImages)) {
+          personaImages = newPersonaImages;
         }
     })
 </script>
 <h2 class="mb-2 text-2xl font-bold mt-2">{language.persona}</h2>
 
-{#key sorted}
 <div class="p-4 rounded-md border-darkborderc border mb-2 flex-wrap flex gap-2 w-full max-w-full min-w-0" bind:this={ele}>
-    {#each DBState.db.personas as persona, i}
-        <button data-risu-idx={i} onclick={() => {
-            changeUserPersona(i)
-        }}>
-            {#if persona.icon === ''}
-                <div class="rounded-md h-20 w-20 shadow-lg bg-textcolor2 cursor-pointer hover:text-green-500" class:ring={i === DBState.db.selectedPersona}></div>
-            {:else}
-                {#await getCharImage(persona.icon, 'css')}
-                    <div class="rounded-md h-20 w-20 shadow-lg bg-textcolor2 cursor-pointer hover:text-green-500" class:ring={i === DBState.db.selectedPersona}></div>
-                {:then im} 
-                    <div class="rounded-md h-20 w-20 shadow-lg bg-textcolor2 cursor-pointer hover:text-green-500" style={im} class:ring={i === DBState.db.selectedPersona}></div>                
-                {/await}
+    <!-- Initial drop zone -->
+    <div class="w-2 h-20" role="listitem" ondragover={(e) => {
+        e.preventDefault()
+        e.dataTransfer.dropEffect = 'move'
+        e.currentTarget.classList.add('bg-green-500')
+    }} ondragleave={(e) => {
+        e.currentTarget.classList.remove('bg-green-500')
+    }} ondrop={(e) => {
+        e.preventDefault()
+        e.currentTarget.classList.remove('bg-green-500')
+        const da = currentDrag
+        if(da){
+            inserter(da,{index:0})
+        }
+    }} ondragenter={preventAll}></div>
+    {#each personaImages as persona, ind}
+        <!-- Persona container with drag -->
+        <div role="listitem"
+            draggable="true"
+            ondragstart={(e) => {personaDragStart({index:ind}, e)}}
+            ondragover={personaDragOver}
+            ondrop={(e) => {personaDrop({index:ind}, e)}}
+            ondragenter={preventAll}
+        >
+            {#if persona.type === 'normal'}
+                <button onclick={() => {
+                    changeUserPersona(persona.index)
+                }}>
+                    {#if persona.icon === ''}
+                        <div class="rounded-md h-20 w-20 shadow-lg bg-textcolor2 cursor-pointer hover:text-green-500" class:ring={persona.index === DBState.db.selectedPersona}></div>
+                    {:else}
+                        {#await getCharImage(persona.icon, 'css')}
+                            <div class="rounded-md h-20 w-20 shadow-lg bg-textcolor2 cursor-pointer hover:text-green-500" class:ring={persona.index === DBState.db.selectedPersona}></div>
+                        {:then im}
+                            <div class="rounded-md h-20 w-20 shadow-lg bg-textcolor2 cursor-pointer hover:text-green-500" style={im} class:ring={persona.index === DBState.db.selectedPersona}></div>
+                        {/await}
+                    {/if}
+                </button>
+            {:else if persona.type === 'folder'}
+                <button onclick={() => {
+                    // TODO: Open folder popup/modal
+                }} class="rounded-md h-20 w-20 shadow-lg bg-textcolor2 cursor-pointer hover:text-green-500 flex items-center justify-center">
+                    <svg viewBox="0 0 24 24" width="2em" height="2em">
+                        <path fill="currentColor" d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
+                    </svg>
+                </button>
             {/if}
-        </button>
+        </div>
+        <!-- Drop zone after each persona -->
+        <div class="w-2 h-20" role="listitem" ondragover={((e) => {
+            e.preventDefault()
+            e.dataTransfer.dropEffect = 'move'
+            e.currentTarget.classList.add('bg-green-500')
+        })} ondragleave={(e) => {
+            e.currentTarget.classList.remove('bg-green-500')
+        }} ondrop={(e) => {
+            e.preventDefault()
+            e.currentTarget.classList.remove('bg-green-500')
+            const da = currentDrag
+            if(da){
+                inserter(da,{index:ind+1})
+            }
+        }} ondragenter={preventAll}></div>
     {/each}
     <div class="flex justify-center items-center ml-2 mr-2">
         <BaseRoundedButton
             onClick={async () => {
                 const sel = parseInt(await alertSelect([language.createfromScratch, language.importCharacter]))
                 if(sel === 0){
+                    const newId = v4()
                     DBState.db.personas.push({
                         name: 'New Persona',
                         icon: '',
                         personaPrompt: '',
-                        note: ''
+                        note: '',
+                        id: newId
                     })
+                    DBState.db.personaOrder.push(newId)
                     changeUserPersona(DBState.db.personas.length - 1)
                 } else if(sel === 1){
                     await importUserPersona()
@@ -115,7 +296,6 @@
         </BaseRoundedButton>
     </div>
 </div>
-{/key}
 
 <div class="flex w-full items-starts rounded-md border-darkborderc border p-4 max-w-full flex-wrap">
     <div class="flex flex-col mt-4 mr-4">
@@ -151,9 +331,24 @@
                 const d = await alertConfirm(`${language.removeConfirm}${DBState.db.personas[DBState.db.selectedPersona].name}`)
                 if(d){
                     saveUserPersona()
+                    const personaId = DBState.db.personas[DBState.db.selectedPersona].id
                     let personas = DBState.db.personas
                     personas.splice(DBState.db.selectedPersona, 1)
                     DBState.db.personas = personas
+
+                    // Remove from personaOrder
+                    DBState.db.personaOrder = DBState.db.personaOrder.filter(item => {
+                        if(typeof item === 'string'){
+                            return item !== personaId
+                        }
+                        // If it's a folder, remove the persona from the folder's data array
+                        if(item.data){
+                            item.data = item.data.filter(id => id !== personaId)
+                            return item.data.length > 0 // Remove empty folders
+                        }
+                        return true
+                    })
+
                     changeUserPersona(0, 'noSave')
                 }
             }}>{language.remove}</Button>
