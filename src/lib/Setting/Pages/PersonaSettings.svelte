@@ -38,7 +38,7 @@
     let currentDrag: DragData = $state(null)
     let dragHoverIndex: number = $state(-1)
     let dragHoverZone: 'left' | 'center' | 'right' | null = $state(null)
-    let selectedItem: {type: 'persona', index: number} | {type: 'folder', id: string} | null = $state(null)
+    let selectedItem: {type: 'persona', index: number} | {type: 'folder', id: string} | null = $state({type: 'persona', index: DBState.db.selectedPersona})
     let openFolderPopover: {id: string, left: number, y: number, above?: boolean} | null = $state(null)
     let popoverElement: HTMLDivElement | null = $state(null)
 
