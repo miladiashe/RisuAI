@@ -625,7 +625,7 @@
     {@const folderData = personaImages.find(p => p.type === 'folder' && p.id === selectedItem.id)}
     {@const folderIndex = getFolderIndex(selectedItem.id)}
     {@const folderObj = folderIndex !== -1 ? DBState.db.personaOrder[folderIndex] : null}
-    {#if folderData && folderData.type === 'folder' && folderObj && typeof folderObj !== 'string'}
+    {#if folderData && folderData.type === 'folder' && folderObj && isFolder(folderObj)}
         <div class="flex w-full items-starts rounded-md border-darkborderc border p-4 max-w-full flex-wrap">
             <div class="flex flex-col mt-4 mr-4">
                 <button onclick={() => {selectFolderImg(selectedItem.id)}}>
