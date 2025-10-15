@@ -76,6 +76,7 @@
 
     const personaDrop = (ind:DragData, e:DragEv) => {
         e.preventDefault()
+        e.stopPropagation() // 이벤트가 containerDrop으로 전파되지 않게 함
         dragHoverIndex = -1
         dragHoverZone = null
         try {
@@ -97,14 +98,8 @@
                     // 중간: 폴더 생성 또는 폴더에 추가
                     // 드롭 대상이 폴더이고, 드래그한 아이템이 같은 폴더에서 온 경우 무시
                     const targetPersona = personaImages[ind.index]
-                    console.log('Center drop check:', {
-                        targetPersona: targetPersona.type === 'folder' ? targetPersona.id : 'not folder',
-                        currentDragFolder: currentDrag.folder,
-                        isSameFolder: targetPersona.type === 'folder' && currentDrag.folder === targetPersona.id
-                    })
                     if (targetPersona.type === 'folder' && currentDrag.folder === targetPersona.id) {
                         // 같은 폴더로 돌아가는 경우 - 아무것도 안함
-                        console.log('Same folder - ignoring')
                         return
                     }
                     createFolder(currentDrag, {index: ind.index})
