@@ -1,9 +1,10 @@
 <script lang="ts">
     import { XIcon } from "lucide-svelte";
     import { language } from "../../lang";
-    
+
     import { DBState } from 'src/ts/stores.svelte';
     import { changeUserPersona } from "src/ts/persona";
+    import { getPersonaIndexObject } from "src/ts/util";
 
 
     interface Props {
@@ -11,6 +12,43 @@
     }
 
     let { close = () => {} }: Props = $props();
+
+    // personaOrder 순서대로 페르소나를 정렬한 배열 생성
+    let orderedPersonas = $derived.by(() => {
+        const idObject = getPersonaIndexObject()
+        const result: {index: number, name: string, note: string, isInFolder?: boolean}[] = []
+
+        for (const item of DBState.db.personaOrder) {
+            if (typeof item === 'string') {
+                // 일반 페르소나
+                const index = idObject[item] ?? -1
+                if (index !== -1) {
+                    const persona = DBState.db.personas[index]
+                    result.push({
+                        index,
+                        name: persona.name,
+                        note: persona.note || ''
+                    })
+                }
+            } else {
+                // 폴더
+                for (const personaId of item.data) {
+                    const index = idObject[personaId] ?? -1
+                    if (index !== -1) {
+                        const persona = DBState.db.personas[index]
+                        result.push({
+                            index,
+                            name: persona.name,
+                            note: persona.note || '',
+                            isInFolder: true
+                        })
+                    }
+                }
+            }
+        }
+
+        return result
+    })
 
 </script>
 
@@ -24,12 +62,15 @@
                 </button>
             </div>
         </div>
-        {#each DBState.db.personas as persona, i}
+        {#each orderedPersonas as persona}
             <button onclick={() => {
-                changeUserPersona(i)
+                changeUserPersona(persona.index)
                 close()
-            }} class="flex items-center text-textcolor border-t-1 border-solid border-0 border-darkborderc p-2 cursor-pointer" class:bg-selected={i === DBState.db.selectedPersona}>
+            }} class="flex items-center text-textcolor border-t-1 border-solid border-0 border-darkborderc p-2 cursor-pointer" class:bg-selected={persona.index === DBState.db.selectedPersona}>
                 <span class="overflow-x-auto whitespace-nowrap w-full text-left">
+                    {#if persona.isInFolder}
+                        <span class="opacity-50 mr-1">└</span>
+                    {/if}
                     <span class="font-medium">{persona.name}</span>
                     {#if persona.note}
                         <span class="opacity-75"> / {persona.note}</span>
