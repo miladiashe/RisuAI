@@ -97,8 +97,14 @@
                     // 중간: 폴더 생성 또는 폴더에 추가
                     // 드롭 대상이 폴더이고, 드래그한 아이템이 같은 폴더에서 온 경우 무시
                     const targetPersona = personaImages[ind.index]
+                    console.log('Center drop check:', {
+                        targetPersona: targetPersona.type === 'folder' ? targetPersona.id : 'not folder',
+                        currentDragFolder: currentDrag.folder,
+                        isSameFolder: targetPersona.type === 'folder' && currentDrag.folder === targetPersona.id
+                    })
                     if (targetPersona.type === 'folder' && currentDrag.folder === targetPersona.id) {
                         // 같은 폴더로 돌아가는 경우 - 아무것도 안함
+                        console.log('Same folder - ignoring')
                         return
                     }
                     createFolder(currentDrag, {index: ind.index})
@@ -306,6 +312,7 @@
 
         // 폴더에서 드래그한 페르소나만 처리 (빈 공간에 드롭)
         if (currentDrag && currentDrag.folder) {
+            // 같은 폴더에서 나와서 빈 공간에 드롭한 경우도 맨 끝으로 가야 함 (폴더에서 빠져나옴)
             // 맨 끝에 추가
             inserter(currentDrag, {index: personaImages.length})
         }
@@ -494,13 +501,29 @@
                             above: spaceBelow <= estimatedPopoverHeight
                         }
                     }
-                }} class="rounded-md h-20 w-20 shadow-lg bg-textcolor2 cursor-pointer hover:text-green-500 flex items-center justify-center"
-                    style:box-shadow={dragHoverIndex === ind && dragHoverZone === 'left' ? 'inset 4px 0 0 0 rgb(34 197 94)' :
-                                      dragHoverIndex === ind && dragHoverZone === 'right' ? 'inset -4px 0 0 0 rgb(34 197 94)' :
-                                      dragHoverIndex === ind && dragHoverZone === 'center' ? 'inset 0 0 0 4px rgb(59 130 246)' : undefined}>
-                    <svg viewBox="0 0 24 24" width="2em" height="2em">
-                        <path fill="currentColor" d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
-                    </svg>
+                }}>
+                    {#if !persona.icon}
+                        <div class="rounded-md h-20 w-20 shadow-lg bg-textcolor2 cursor-pointer hover:text-green-500 flex items-center justify-center"
+                            style:box-shadow={dragHoverIndex === ind && dragHoverZone === 'left' ? 'inset 4px 0 0 0 rgb(34 197 94)' :
+                                              dragHoverIndex === ind && dragHoverZone === 'right' ? 'inset -4px 0 0 0 rgb(34 197 94)' :
+                                              dragHoverIndex === ind && dragHoverZone === 'center' ? 'inset 0 0 0 4px rgb(59 130 246)' : undefined}>
+                            <svg viewBox="0 0 24 24" width="2em" height="2em">
+                                <path fill="currentColor" d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
+                            </svg>
+                        </div>
+                    {:else}
+                        {#await getCharImage(persona.icon, 'css')}
+                            <div class="rounded-md h-20 w-20 shadow-lg bg-textcolor2 cursor-pointer hover:text-green-500"
+                                style:box-shadow={dragHoverIndex === ind && dragHoverZone === 'left' ? 'inset 4px 0 0 0 rgb(34 197 94)' :
+                                                  dragHoverIndex === ind && dragHoverZone === 'right' ? 'inset -4px 0 0 0 rgb(34 197 94)' :
+                                                  dragHoverIndex === ind && dragHoverZone === 'center' ? 'inset 0 0 0 4px rgb(59 130 246)' : undefined}></div>
+                        {:then im}
+                            <div class="rounded-md h-20 w-20 shadow-lg bg-textcolor2 cursor-pointer hover:text-green-500 object-cover object-top" style={im}
+                                style:box-shadow={dragHoverIndex === ind && dragHoverZone === 'left' ? 'inset 4px 0 0 0 rgb(34 197 94)' :
+                                                  dragHoverIndex === ind && dragHoverZone === 'right' ? 'inset -4px 0 0 0 rgb(34 197 94)' :
+                                                  dragHoverIndex === ind && dragHoverZone === 'center' ? 'inset 0 0 0 4px rgb(59 130 246)' : undefined}></div>
+                        {/await}
+                    {/if}
                 </div>
             {/if}
         </div>
