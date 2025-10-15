@@ -8,25 +8,37 @@
     import { alertConfirm, alertSelect } from "src/ts/alert";
     import { getCharImage } from "src/ts/characters";
     import { changeUserPersona, exportUserPersona, importUserPersona, saveUserPersona, selectUserImg } from "src/ts/persona";
-    import { setDatabase, saveImage } from "src/ts/storage/database.svelte";
+    import { saveImage } from "src/ts/storage/database.svelte";
     import { selectSingleFile } from "src/ts/util";
     import { DBState } from 'src/ts/stores.svelte';
     import { getPersonaIndexObject } from "src/ts/util";
     import { checkPersonaOrder } from "src/ts/globalApi.svelte";
-    import { get } from "svelte/store";
     import { v4 } from "uuid"
     import { isEqual } from "lodash";
-
-    let ele: HTMLDivElement = $state()
 
     // Drag & Drop zone ratios
     const DROP_ZONE_LEFT_THRESHOLD = 0.25  // 좌측 25%: 왼쪽에 삽입
     const DROP_ZONE_RIGHT_THRESHOLD = 0.75 // 우측 25%: 오른쪽에 삽입
     // 중간 50%: 폴더 생성
 
+    // DB에 저장되는 폴더 타입
+    type FolderData = {
+        name: string
+        data: string[]  // 페르소나 ID 배열
+        color: string
+        id: string
+        img?: string
+    }
+
+    // 화면 표시용 타입
     type personaTypeNormal = { type:'normal', icon: string, index: number, name:string }
     type personaType = personaTypeNormal | {type:'folder', folder:personaTypeNormal[], id:string, name:string, color:string, icon?:string}
     let personaImages: personaType[] = $state([])
+
+    // 타입 가드
+    function isFolder(item: string | FolderData): item is FolderData {
+        return typeof item !== 'string'
+    }
 
     type DragData = {
         index:number,
@@ -54,6 +66,12 @@
         if (dragHoverZone === 'right') return 'inset -4px 0 0 0 rgb(34 197 94)'
         if (dragHoverZone === 'center') return 'inset 0 0 0 4px rgb(59 130 246)'
         return undefined
+    }
+
+    const handlePersonaClick = (personaIndex: number) => {
+        selectedItem = {type: 'persona', index: personaIndex}
+        openFolderPopover = null
+        changeUserPersona(personaIndex)
     }
 
     const handleFolderClick = (folderId: string, target: HTMLElement) => {
@@ -145,56 +163,93 @@
     function getFolderIndex(id:string){
         for(let i=0;i<DBState.db.personaOrder.length;i++){
             const data = DBState.db.personaOrder[i]
-            if(typeof(data) !== 'string' && data.id === id){
+            if(isFolder(data) && data.id === id){
                 return i
             }
         }
         return -1
     }
 
+    // 드래그 데이터에서 실제 페르소나 ID 또는 폴더 객체 가져오기
+    function getItemFromDrag(dragData: DragData): string | FolderData {
+        const db = DBState.db
+        if (dragData.folder) {
+            // 폴더 내부의 아이템
+            const folderIndex = getFolderIndex(dragData.folder)
+            const folder = db.personaOrder[folderIndex]
+            if (isFolder(folder)) {
+                return folder.data[dragData.index]
+            }
+            return '' // 폴더를 찾지 못한 경우
+        } else {
+            // 메인 그리드의 아이템
+            return db.personaOrder[dragData.index]
+        }
+    }
+
+    // 원래 위치에서 아이템 제거
+    function removeItemFromSource(dragData: DragData, itemId: string) {
+        const db = DBState.db
+        if (dragData.folder) {
+            // 폴더에서 제거
+            const folderIndex = getFolderIndex(dragData.folder)
+            if (folderIndex !== -1) {
+                const folderItem = db.personaOrder[folderIndex]
+                if (isFolder(folderItem)) {
+                    const folder: FolderData = {...folderItem}
+                    const itemIndex = folder.data.indexOf(itemId)
+                    if (itemIndex !== -1) {
+                        folder.data.splice(itemIndex, 1)
+                        db.personaOrder[folderIndex] = folder
+                    }
+                }
+            }
+        } else {
+            // 메인 그리드에서 제거
+            const item = db.personaOrder[dragData.index]
+            const searchId = typeof item === 'string' ? item : item.id
+            const itemIndex = db.personaOrder.findIndex(ord =>
+                typeof ord === 'string' ? ord === searchId : ord.id === searchId
+            )
+            if (itemIndex !== -1) {
+                db.personaOrder.splice(itemIndex, 1)
+            }
+        }
+    }
+
     const createFolder = (mainIndex:DragData, targetIndex:DragData) => {
         if(mainIndex.index === targetIndex.index && mainIndex.folder === targetIndex.folder){
             return
         }
-        let db = DBState.db
-        let mainFolderIndex = mainIndex.folder ? getFolderIndex(mainIndex.folder) : null
-        let mainFolder = db.personaOrder[mainFolderIndex] as any
         if(targetIndex.folder){
             return // 폴더 내부에는 폴더를 만들 수 없음
         }
-        const main = mainIndex.folder ? mainFolder.data[mainIndex.index] : db.personaOrder[mainIndex.index]
-        const target = db.personaOrder[targetIndex.index]
-        if(typeof(main) !== 'string'){
+
+        const db = DBState.db
+        const mainItem = getItemFromDrag(mainIndex)
+        const targetItem = db.personaOrder[targetIndex.index]
+
+        if(typeof(mainItem) !== 'string'){
             return // 폴더는 폴더와 합칠 수 없음
         }
-        if(typeof(target) === 'string'){
+
+        if(typeof(targetItem) === 'string'){
             // 두 개의 페르소나를 합쳐서 새 폴더 생성
-            const newFolder:any = {
+            const newFolder: FolderData = {
                 name: "New Folder",
-                data: [main, target],
+                data: [mainItem, targetItem],
                 color: "",
                 id: v4()
             }
             db.personaOrder[targetIndex.index] = newFolder
-            if(mainIndex.folder){
-                mainFolder.data.splice(mainIndex.index, 1)
-                db.personaOrder[mainFolderIndex] = mainFolder
-            }
-            else{
-                db.personaOrder.splice(mainIndex.index, 1)
-            }
-        }
-        else{
+        } else if (isFolder(targetItem)) {
             // 페르소나를 기존 폴더에 추가
-            target.data.push(main)
-            if(mainIndex.folder){
-                mainFolder.data.splice(mainIndex.index, 1)
-                db.personaOrder[mainFolderIndex] = mainFolder
-            }
-            else{
-                db.personaOrder.splice(mainIndex.index, 1)
-            }
+            targetItem.data.push(mainItem)
         }
+
+        // 원래 위치에서 제거
+        removeItemFromSource(mainIndex, mainItem)
+
         DBState.db.personaOrder = db.personaOrder
         checkPersonaOrder()
     }
@@ -203,81 +258,59 @@
         if(mainIndex.index === targetIndex.index && mainIndex.folder === targetIndex.folder){
             return
         }
-        let db = DBState.db
-        let mainFolderIndex = mainIndex.folder ? getFolderIndex(mainIndex.folder) : null
-        let targetFolderIndex = targetIndex.folder ? getFolderIndex(targetIndex.folder) : null
-        let mainFolderId = mainIndex.folder ? (db.personaOrder[mainFolderIndex] as any).id : ''
-        let movingFolder:any|false = false
-        let mainId = ''
-        if(mainIndex.folder){
-            mainId = (db.personaOrder[mainFolderIndex] as any).data[mainIndex.index]
+
+        const db = DBState.db
+        const mainItem = getItemFromDrag(mainIndex)
+
+        // 폴더를 폴더 안으로 이동할 수 없음
+        if(typeof(mainItem) !== 'string' && targetIndex.folder){
+            return
         }
-        else{
-            const da = db.personaOrder[mainIndex.index]
-            if(typeof(da) !== 'string'){
-                mainId = da.id
-                movingFolder = safeStructuredClone($state.snapshot(da))
-                if(targetIndex.folder){
-                    return
-                }
-            }
-            else{
-                mainId = da
-            }
-        }
+
+        const mainId = typeof(mainItem) === 'string' ? mainItem : mainItem.id
+
+        // 목표 위치에 삽입
         if(targetIndex.folder){
-            const folder = db.personaOrder[targetFolderIndex] as any
-            folder.data.splice(targetIndex.index,0,mainId)
-            db.personaOrder[targetFolderIndex] = folder
-        }
-        else if(movingFolder){
-            db.personaOrder.splice(targetIndex.index,0,movingFolder)
-        }
-        else{
-            db.personaOrder.splice(targetIndex.index,0,mainId)
-        }
-        if(mainIndex.folder){
-            mainFolderIndex = -1
-            for(let i=0;i<db.personaOrder.length;i++){
-                const a =db.personaOrder[i]
-                if(typeof(a) !== 'string'){
-                    if(a.id === mainFolderId){
-                        mainFolderIndex = i
-                        break
-                    }
-                }
+            // 폴더 내부로 삽입
+            const folderIndex = getFolderIndex(targetIndex.folder)
+            const folderItem = db.personaOrder[folderIndex]
+            if (isFolder(folderItem)) {
+                const folder: FolderData = {...folderItem}
+                folder.data.splice(targetIndex.index, 0, mainId)
+                db.personaOrder[folderIndex] = folder
             }
-            if(mainFolderIndex !== -1){
-                const folder:any = db.personaOrder[mainFolderIndex] as any
-                const ind = mainIndex.index > targetIndex.index ? folder.data.lastIndexOf(mainId) : folder.data.indexOf(mainId)
-                if(ind !== -1){
-                    folder.data.splice(ind, 1)
-                }
-                db.personaOrder[mainFolderIndex] = folder
-            }
-            else{
-                console.log('folder not found')
-            }
-        }
-        else if(movingFolder){
-            let idList:string[] = []
-            for(const ord of db.personaOrder){
-                idList.push(typeof(ord) === 'string' ? ord : ord.id)
-            }
-            const ind = mainIndex.index > targetIndex.index ? idList.lastIndexOf(mainId) : idList.indexOf(mainId)
-            if(ind !== -1){
-                db.personaOrder.splice(ind, 1)
-            }
-        }
-        else{
-            const ind = mainIndex.index > targetIndex.index ? db.personaOrder.lastIndexOf(mainId) : db.personaOrder.indexOf(mainId)
-            if(ind !== -1){
-                db.personaOrder.splice(ind, 1)
+        } else {
+            // 메인 그리드로 삽입
+            if(isFolder(mainItem)){
+                // 폴더를 이동하는 경우
+                const clonedFolder = safeStructuredClone($state.snapshot(mainItem))
+                db.personaOrder.splice(targetIndex.index, 0, clonedFolder)
+            } else {
+                // 페르소나를 이동하는 경우
+                db.personaOrder.splice(targetIndex.index, 0, mainId)
             }
         }
 
+        // 원래 위치에서 제거
+        removeItemFromSource(mainIndex, mainId)
+
         DBState.db.personaOrder = db.personaOrder
         checkPersonaOrder()
+    }
+
+    // 폴더 업데이트 헬퍼 함수
+    function updateFolder(folderId: string, updates: (folder: FolderData) => void) {
+        const folderIndex = getFolderIndex(folderId)
+        if (folderIndex === -1) return
+
+        const folderItem = DBState.db.personaOrder[folderIndex]
+        if (!isFolder(folderItem)) return
+
+        // 폴더 객체를 복사해서 새로 만들어야 reactivity가 작동함
+        const folder: FolderData = {...folderItem}
+        updates(folder)
+        DBState.db.personaOrder[folderIndex] = folder
+        DBState.db.personaOrder = [...DBState.db.personaOrder]
     }
 
     // 폴더 이미지 선택 함수
@@ -288,14 +321,9 @@
         const img = selected.data
         const imgp = await saveImage(img)
 
-        const folderIndex = getFolderIndex(folderId)
-        if (folderIndex === -1) return
-
-        // 폴더 객체를 복사해서 새로 만들어야 reactivity가 작동함
-        const folder = {...(DBState.db.personaOrder[folderIndex] as any)}
-        folder.img = imgp
-        DBState.db.personaOrder[folderIndex] = folder
-        DBState.db.personaOrder = [...DBState.db.personaOrder]
+        updateFolder(folderId, (folder) => {
+            folder.img = imgp
+        })
     }
 
     // 폴더 삭제 함수 (페르소나들은 바깥으로)
@@ -303,12 +331,14 @@
         const folderIndex = getFolderIndex(folderId)
         if (folderIndex === -1) return
 
-        const folder = DBState.db.personaOrder[folderIndex] as any
-        const d = await alertConfirm(`Delete folder "${folder.name}"? Personas inside will be moved out.`)
+        const folderItem = DBState.db.personaOrder[folderIndex]
+        if (!isFolder(folderItem)) return
+
+        const d = await alertConfirm(`Delete folder "${folderItem.name}"? Personas inside will be moved out.`)
         if (!d) return
 
         // 폴더 안의 페르소나들을 폴더 위치에 삽입
-        const personasInFolder = folder.data
+        const personasInFolder = folderItem.data
         DBState.db.personaOrder.splice(folderIndex, 1, ...personasInFolder)
 
         selectedItem = null
@@ -317,14 +347,9 @@
 
     // 폴더 이름 업데이트 함수
     function updateFolderName(folderId: string, newName: string) {
-        const folderIndex = getFolderIndex(folderId)
-        if (folderIndex === -1) return
-
-        // 폴더 객체를 복사해서 새로 만들어야 reactivity가 작동함
-        const folder = {...(DBState.db.personaOrder[folderIndex] as any)}
-        folder.name = newName
-        DBState.db.personaOrder[folderIndex] = folder
-        DBState.db.personaOrder = [...DBState.db.personaOrder]
+        updateFolder(folderId, (folder) => {
+            folder.name = newName
+        })
     }
 
     // 그리드 컨테이너에 드롭 (빈 공간에 드롭 시 맨 끝에 추가)
@@ -437,7 +462,7 @@
 </script>
 <h2 class="mb-2 text-2xl font-bold mt-2">{language.persona}</h2>
 
-<div class="p-4 rounded-md border-darkborderc border mb-2 flex-wrap flex gap-2 w-full max-w-full min-w-0" bind:this={ele}
+<div class="p-4 rounded-md border-darkborderc border mb-2 flex-wrap flex gap-2 w-full max-w-full min-w-0"
     ondragover={containerDragOver}
     ondrop={containerDrop}>
     {#each personaImages as persona, ind}
@@ -453,15 +478,13 @@
         >
             {#if persona.type === 'normal'}
                 <!-- svelte-ignore a11y_no_static_element_interactions -->
-                <div role="button" tabindex="0" onclick={() => {
-                    selectedItem = {type: 'persona', index: persona.index}
-                    changeUserPersona(persona.index)
-                }} onkeydown={(e) => {
-                    if (e.key === "Enter") {
-                        selectedItem = {type: 'persona', index: persona.index}
-                        changeUserPersona(persona.index)
-                    }
-                }}>
+                <div role="button" tabindex="0"
+                    onclick={() => handlePersonaClick(persona.index)}
+                    onkeydown={(e) => {
+                        if (e.key === "Enter") {
+                            handlePersonaClick(persona.index)
+                        }
+                    }}>
                     {#if persona.icon === ''}
                         <div class="rounded-md h-20 w-20 shadow-lg bg-textcolor2 cursor-pointer hover:text-green-500"
                             class:ring={selectedItem?.type === 'persona' && selectedItem.index === persona.index}
@@ -574,17 +597,13 @@
                     }}
                 >
                     <!-- svelte-ignore a11y_no_static_element_interactions -->
-                    <div role="button" tabindex="0" onclick={() => {
-                        selectedItem = {type: 'persona', index: persona.index}
-                        openFolderPopover = null
-                        changeUserPersona(persona.index)
-                    }} onkeydown={(e) => {
-                        if (e.key === "Enter") {
-                            selectedItem = {type: 'persona', index: persona.index}
-                            openFolderPopover = null
-                            changeUserPersona(persona.index)
-                        }
-                    }}>
+                    <div role="button" tabindex="0"
+                        onclick={() => handlePersonaClick(persona.index)}
+                        onkeydown={(e) => {
+                            if (e.key === "Enter") {
+                                handlePersonaClick(persona.index)
+                            }
+                        }}>
                         {#if persona.icon === ''}
                             <div class="rounded-md h-16 w-16 shadow-lg bg-textcolor2 cursor-pointer hover:ring hover:ring-green-500" class:ring={persona.index === DBState.db.selectedPersona}></div>
                         {:else}
