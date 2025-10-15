@@ -45,6 +45,43 @@
         return typeof item !== 'string'
     }
 
+    // 중복 페르소나 제거 함수
+    function deduplicatePersonaOrder() {
+        const db = DBState.db
+        const seenIds = new Set<string>()
+        const newOrder: (string | FolderData)[] = []
+
+        for (const item of db.personaOrder) {
+            if (typeof item === 'string') {
+                // 페르소나 ID
+                if (!seenIds.has(item)) {
+                    seenIds.add(item)
+                    newOrder.push(item)
+                }
+            } else {
+                // 폴더
+                const folder = item
+                const deduplicatedData: string[] = []
+                for (const personaId of folder.data) {
+                    if (!seenIds.has(personaId)) {
+                        seenIds.add(personaId)
+                        deduplicatedData.push(personaId)
+                    }
+                }
+
+                // 폴더에 최소 1개 이상의 페르소나가 있어야 함
+                if (deduplicatedData.length > 0) {
+                    newOrder.push({
+                        ...folder,
+                        data: deduplicatedData
+                    })
+                }
+            }
+        }
+
+        db.personaOrder = newOrder
+    }
+
     type DragData = {
         index:number,
         folder?:string
@@ -199,11 +236,21 @@
             if (folderIndex !== -1) {
                 const folderItem = db.personaOrder[folderIndex]
                 if (isFolder(folderItem)) {
-                    const folder: FolderData = {...folderItem}
+                    // 깊은 복사: 배열도 새로 생성
+                    const folder: FolderData = {
+                        ...folderItem,
+                        data: [...folderItem.data]  // 배열 복사
+                    }
                     const itemIndex = folder.data.indexOf(itemId)
                     if (itemIndex !== -1) {
                         folder.data.splice(itemIndex, 1)
-                        db.personaOrder[folderIndex] = folder
+
+                        // 폴더가 비어있으면 폴더 자체를 제거
+                        if (folder.data.length === 0) {
+                            db.personaOrder.splice(folderIndex, 1)
+                        } else {
+                            db.personaOrder[folderIndex] = folder
+                        }
                     }
                 }
             }
@@ -236,23 +283,44 @@
             return // 폴더는 폴더와 합칠 수 없음
         }
 
-        if(typeof(targetItem) === 'string'){
+        // 먼저 원래 위치에서 제거
+        removeItemFromSource(mainIndex, mainItem)
+
+        // 제거 후 targetIndex를 다시 찾아야 함 (인덱스가 변경될 수 있음)
+        const newTargetItem = db.personaOrder.find(item => {
+            if (typeof targetItem === 'string') {
+                return item === targetItem
+            } else {
+                return isFolder(item) && item.id === targetItem.id
+            }
+        })
+
+        if (!newTargetItem) {
+            // 대상을 찾을 수 없으면 취소
+            return
+        }
+
+        const newTargetIndex = db.personaOrder.indexOf(newTargetItem)
+
+        if(typeof(newTargetItem) === 'string'){
             // 두 개의 페르소나를 합쳐서 새 폴더 생성
             const newFolder: FolderData = {
                 name: "New Folder",
-                data: [mainItem, targetItem],
+                data: [mainItem, newTargetItem],
                 id: v4()
             }
-            db.personaOrder[targetIndex.index] = newFolder
-        } else if (isFolder(targetItem)) {
-            // 페르소나를 기존 폴더에 추가
-            targetItem.data.push(mainItem)
+            db.personaOrder[newTargetIndex] = newFolder
+        } else if (isFolder(newTargetItem)) {
+            // 페르소나를 기존 폴더에 추가 (깊은 복사)
+            const updatedFolder: FolderData = {
+                ...newTargetItem,
+                data: [...newTargetItem.data, mainItem]  // 배열도 복사
+            }
+            db.personaOrder[newTargetIndex] = updatedFolder
         }
 
-        // 원래 위치에서 제거
-        removeItemFromSource(mainIndex, mainItem)
-
         DBState.db.personaOrder = db.personaOrder
+        deduplicatePersonaOrder() // 중복 제거
         checkPersonaOrder()
     }
 
@@ -271,14 +339,31 @@
 
         const mainId = typeof(mainItem) === 'string' ? mainItem : mainItem.id
 
+        // 인덱스 조정: 제거 후 삽입 위치가 변경되는지 계산
+        let adjustedTargetIndex = targetIndex.index
+
+        // 같은 레벨(메인 그리드)에서 이동하는 경우
+        if (!mainIndex.folder && !targetIndex.folder) {
+            // 원본이 대상보다 앞에 있으면, 제거 후 인덱스가 1 감소
+            if (mainIndex.index < targetIndex.index) {
+                adjustedTargetIndex = targetIndex.index - 1
+            }
+        }
+
+        // 먼저 원래 위치에서 제거
+        removeItemFromSource(mainIndex, mainId)
+
         // 목표 위치에 삽입
         if(targetIndex.folder){
             // 폴더 내부로 삽입
             const folderIndex = getFolderIndex(targetIndex.folder)
             const folderItem = db.personaOrder[folderIndex]
             if (isFolder(folderItem)) {
-                const folder: FolderData = {...folderItem}
-                folder.data.splice(targetIndex.index, 0, mainId)
+                const folder: FolderData = {
+                    ...folderItem,
+                    data: [...folderItem.data]  // 배열 복사
+                }
+                folder.data.splice(adjustedTargetIndex, 0, mainId)
                 db.personaOrder[folderIndex] = folder
             }
         } else {
@@ -286,17 +371,15 @@
             if(isFolder(mainItem)){
                 // 폴더를 이동하는 경우
                 const clonedFolder = safeStructuredClone($state.snapshot(mainItem))
-                db.personaOrder.splice(targetIndex.index, 0, clonedFolder)
+                db.personaOrder.splice(adjustedTargetIndex, 0, clonedFolder)
             } else {
                 // 페르소나를 이동하는 경우
-                db.personaOrder.splice(targetIndex.index, 0, mainId)
+                db.personaOrder.splice(adjustedTargetIndex, 0, mainId)
             }
         }
 
-        // 원래 위치에서 제거
-        removeItemFromSource(mainIndex, mainId)
-
         DBState.db.personaOrder = db.personaOrder
+        deduplicatePersonaOrder() // 중복 제거
         checkPersonaOrder()
     }
 
@@ -308,8 +391,11 @@
         const folderItem = DBState.db.personaOrder[folderIndex]
         if (!isFolder(folderItem)) return
 
-        // 폴더 객체를 복사해서 새로 만들어야 reactivity가 작동함
-        const folder: FolderData = {...folderItem}
+        // 폴더 객체를 깊은 복사해서 새로 만들어야 reactivity가 작동함
+        const folder: FolderData = {
+            ...folderItem,
+            data: [...folderItem.data]  // 배열도 복사
+        }
         updates(folder)
         DBState.db.personaOrder[folderIndex] = folder
         DBState.db.personaOrder = [...DBState.db.personaOrder]
@@ -375,6 +461,11 @@
             e.dataTransfer!.dropEffect = 'move'
         }
     }
+
+    // 컴포넌트 초기화 시 중복 제거
+    $effect(() => {
+        deduplicatePersonaOrder()
+    })
 
     // 팝오버 위치 재조정 (실제 렌더링된 너비 기준)
     $effect(() => {
