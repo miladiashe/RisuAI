@@ -39,17 +39,19 @@
     type FolderItem = { type:'folder', folder:PersonaItem[], id:string, name:string, icon?:string }
     type PersonaGridItem = PersonaItem | FolderItem
     let personaImages: PersonaGridItem[] = $state([])
+    let deduplicationInitialized = $state(false)  // 초기화 플래그
 
     // 타입 가드
     function isFolder(item: string | FolderData): item is FolderData {
         return typeof item !== 'string'
     }
 
-    // 중복 페르소나 제거 함수
+    // 중복 페르소나 제거 함수 (변경사항이 있을 때만 업데이트)
     function deduplicatePersonaOrder() {
         const db = DBState.db
         const seenIds = new Set<string>()
         const newOrder: (string | FolderData)[] = []
+        let hasChanges = false
 
         for (const item of db.personaOrder) {
             if (typeof item === 'string') {
@@ -57,6 +59,8 @@
                 if (!seenIds.has(item)) {
                     seenIds.add(item)
                     newOrder.push(item)
+                } else {
+                    hasChanges = true  // 중복 발견!
                 }
             } else {
                 // 폴더
@@ -66,20 +70,30 @@
                     if (!seenIds.has(personaId)) {
                         seenIds.add(personaId)
                         deduplicatedData.push(personaId)
+                    } else {
+                        hasChanges = true  // 중복 발견!
                     }
                 }
 
                 // 폴더에 최소 1개 이상의 페르소나가 있어야 함
                 if (deduplicatedData.length > 0) {
+                    if (deduplicatedData.length !== folder.data.length) {
+                        hasChanges = true  // 폴더 내용 변경됨
+                    }
                     newOrder.push({
                         ...folder,
                         data: deduplicatedData
                     })
+                } else {
+                    hasChanges = true  // 빈 폴더 제거됨
                 }
             }
         }
 
-        db.personaOrder = newOrder
+        // 변경사항이 있을 때만 업데이트 (무한루프 방지)
+        if (hasChanges) {
+            db.personaOrder = newOrder
+        }
     }
 
     type DragData = {
@@ -462,9 +476,12 @@
         }
     }
 
-    // 컴포넌트 초기화 시 중복 제거
+    // 컴포넌트 초기화 시 중복 제거 (한 번만 실행)
     $effect(() => {
-        deduplicatePersonaOrder()
+        if (!deduplicationInitialized) {
+            deduplicatePersonaOrder()
+            deduplicationInitialized = true
+        }
     })
 
     // 팝오버 위치 재조정 (실제 렌더링된 너비 기준)
