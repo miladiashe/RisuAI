@@ -16,7 +16,7 @@
     // personaOrder 순서대로 페르소나를 정렬한 배열 생성
     let orderedPersonas = $derived.by(() => {
         const idObject = getPersonaIndexObject()
-        const result: Array<{type: 'persona', index: number, name: string, note: string} | {type: 'folder', name: string}> = []
+        const result: Array<{type: 'persona', index: number, name: string, note: string, isInFolder?: boolean} | {type: 'folder', name: string}> = []
 
         for (const item of DBState.db.personaOrder) {
             if (typeof item === 'string') {
@@ -46,7 +46,8 @@
                             type: 'persona',
                             index,
                             name: persona.name,
-                            note: persona.note || ''
+                            note: persona.note || '',
+                            isInFolder: true
                         })
                     }
                 }
@@ -83,6 +84,9 @@
                     close()
                 }} class="flex items-center text-textcolor border-t-1 border-solid border-0 border-darkborderc p-2 cursor-pointer" class:bg-selected={item.index === DBState.db.selectedPersona}>
                     <span class="overflow-x-auto whitespace-nowrap w-full text-left">
+                        {#if item.isInFolder}
+                            <span class="opacity-50 mr-1">└</span>
+                        {/if}
                         <span class="font-medium">{item.name}</span>
                         {#if item.note}
                             <span class="opacity-75"> / {item.note}</span>
