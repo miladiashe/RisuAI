@@ -38,7 +38,7 @@
     let currentDrag: DragData = $state(null)
     let dragHoverIndex: number = $state(-1)
     let dragHoverZone: 'left' | 'center' | 'right' | null = $state(null)
-    let selectedFolder: string | null = $state(null)
+    let selectedItem: {type: 'persona', index: number} | {type: 'folder', id: string} | null = $state(null)
     let openFolderPopover: {id: string, left: number, y: number, above?: boolean} | null = $state(null)
     let popoverElement: HTMLDivElement | null = $state(null)
 
@@ -46,6 +46,34 @@
         if(relativeX < DROP_ZONE_LEFT_THRESHOLD) return 'left'
         if(relativeX > DROP_ZONE_RIGHT_THRESHOLD) return 'right'
         return 'center'
+    }
+
+    const getDragBoxShadow = (ind: number) => {
+        if (dragHoverIndex !== ind) return undefined
+        if (dragHoverZone === 'left') return 'inset 4px 0 0 0 rgb(34 197 94)'
+        if (dragHoverZone === 'right') return 'inset -4px 0 0 0 rgb(34 197 94)'
+        if (dragHoverZone === 'center') return 'inset 0 0 0 4px rgb(59 130 246)'
+        return undefined
+    }
+
+    const handleFolderClick = (folderId: string, target: HTMLElement) => {
+        selectedItem = {type: 'folder', id: folderId}
+        const rect = target.getBoundingClientRect()
+        const spaceBelow = window.innerHeight - rect.bottom
+        const estimatedPopoverHeight = 200
+        const PADDING = 16
+        const estimatedPopoverWidth = Math.min(448, window.innerWidth - 32)
+
+        let left = rect.left + rect.width / 2 - estimatedPopoverWidth / 2
+        const maxLeft = Math.max(PADDING, window.innerWidth - estimatedPopoverWidth - PADDING)
+        left = Math.max(PADDING, Math.min(left, maxLeft))
+
+        openFolderPopover = {
+            id: folderId,
+            left: left,
+            y: spaceBelow > estimatedPopoverHeight ? rect.bottom + 8 : rect.top - 8,
+            above: spaceBelow <= estimatedPopoverHeight
+        }
     }
 
     const personaDragStart = (ind:DragData, e:DragEv) => {
@@ -283,7 +311,7 @@
         const personasInFolder = folder.data
         DBState.db.personaOrder.splice(folderIndex, 1, ...personasInFolder)
 
-        selectedFolder = null
+        selectedItem = null
         openFolderPopover = null
     }
 
@@ -426,83 +454,43 @@
             {#if persona.type === 'normal'}
                 <!-- svelte-ignore a11y_no_static_element_interactions -->
                 <div role="button" tabindex="0" onclick={() => {
-                    selectedFolder = null
+                    selectedItem = {type: 'persona', index: persona.index}
                     changeUserPersona(persona.index)
                 }} onkeydown={(e) => {
                     if (e.key === "Enter") {
-                        selectedFolder = null
+                        selectedItem = {type: 'persona', index: persona.index}
                         changeUserPersona(persona.index)
                     }
                 }}>
                     {#if persona.icon === ''}
-                        <div class="rounded-md h-20 w-20 shadow-lg bg-textcolor2 cursor-pointer hover:text-green-500" class:ring={persona.index === DBState.db.selectedPersona}
-                            style:box-shadow={dragHoverIndex === ind && dragHoverZone === 'left' ? 'inset 4px 0 0 0 rgb(34 197 94)' :
-                                              dragHoverIndex === ind && dragHoverZone === 'right' ? 'inset -4px 0 0 0 rgb(34 197 94)' :
-                                              dragHoverIndex === ind && dragHoverZone === 'center' ? 'inset 0 0 0 4px rgb(59 130 246)' : undefined}></div>
+                        <div class="rounded-md h-20 w-20 shadow-lg bg-textcolor2 cursor-pointer hover:text-green-500"
+                            class:ring={selectedItem?.type === 'persona' && selectedItem.index === persona.index}
+                            style:box-shadow={getDragBoxShadow(ind)}></div>
                     {:else}
                         {#await getCharImage(persona.icon, 'css')}
-                            <div class="rounded-md h-20 w-20 shadow-lg bg-textcolor2 cursor-pointer hover:text-green-500" class:ring={persona.index === DBState.db.selectedPersona}
-                                style:box-shadow={dragHoverIndex === ind && dragHoverZone === 'left' ? 'inset 4px 0 0 0 rgb(34 197 94)' :
-                                                  dragHoverIndex === ind && dragHoverZone === 'right' ? 'inset -4px 0 0 0 rgb(34 197 94)' :
-                                                  dragHoverIndex === ind && dragHoverZone === 'center' ? 'inset 0 0 0 4px rgb(59 130 246)' : undefined}></div>
+                            <div class="rounded-md h-20 w-20 shadow-lg bg-textcolor2 cursor-pointer hover:text-green-500"
+                                class:ring={selectedItem?.type === 'persona' && selectedItem.index === persona.index}
+                                style:box-shadow={getDragBoxShadow(ind)}></div>
                         {:then im}
-                            <div class="rounded-md h-20 w-20 shadow-lg bg-textcolor2 cursor-pointer hover:text-green-500" style={im} class:ring={persona.index === DBState.db.selectedPersona}
-                                style:box-shadow={dragHoverIndex === ind && dragHoverZone === 'left' ? 'inset 4px 0 0 0 rgb(34 197 94)' :
-                                                  dragHoverIndex === ind && dragHoverZone === 'right' ? 'inset -4px 0 0 0 rgb(34 197 94)' :
-                                                  dragHoverIndex === ind && dragHoverZone === 'center' ? 'inset 0 0 0 4px rgb(59 130 246)' : undefined}></div>
+                            <div class="rounded-md h-20 w-20 shadow-lg bg-textcolor2 cursor-pointer hover:text-green-500" style={im}
+                                class:ring={selectedItem?.type === 'persona' && selectedItem.index === persona.index}
+                                style:box-shadow={getDragBoxShadow(ind)}></div>
                         {/await}
                     {/if}
                 </div>
             {:else if persona.type === 'folder'}
                 <!-- svelte-ignore a11y_no_static_element_interactions -->
-                <div role="button" tabindex="0" onclick={(e) => {
-                    selectedFolder = persona.id
-                    const rect = e.currentTarget.getBoundingClientRect()
-                    const spaceBelow = window.innerHeight - rect.bottom
-                    const estimatedPopoverHeight = 200
-                    const PADDING = 16
-                    // max-w-md = 28rem = 448px, max-w-[calc(100vw-32px)]
-                    const estimatedPopoverWidth = Math.min(448, window.innerWidth - 32)
-
-                    // 폴더 중심에서 팝오버 절반만큼 왼쪽으로 이동
-                    let left = rect.left + rect.width / 2 - estimatedPopoverWidth / 2
-                    // 화면 경계 체크 (최대값이 최소값보다 작을 수 있으므로 Math.max로 보정)
-                    const maxLeft = Math.max(PADDING, window.innerWidth - estimatedPopoverWidth - PADDING)
-                    left = Math.max(PADDING, Math.min(left, maxLeft))
-
-                    openFolderPopover = {
-                        id: persona.id,
-                        left: left,
-                        y: spaceBelow > estimatedPopoverHeight ? rect.bottom + 8 : rect.top - 8,
-                        above: spaceBelow <= estimatedPopoverHeight
-                    }
-                }} onkeydown={(e) => {
-                    if (e.key === "Enter") {
-                        selectedFolder = persona.id
-                        const rect = e.currentTarget.getBoundingClientRect()
-                        const spaceBelow = window.innerHeight - rect.bottom
-                        const estimatedPopoverHeight = 200
-                        const PADDING = 16
-                        const estimatedPopoverWidth = Math.min(448, window.innerWidth - 32)
-
-                        let left = rect.left + rect.width / 2 - estimatedPopoverWidth / 2
-                        const maxLeft = Math.max(PADDING, window.innerWidth - estimatedPopoverWidth - PADDING)
-                        left = Math.max(PADDING, Math.min(left, maxLeft))
-
-                        openFolderPopover = {
-                            id: persona.id,
-                            left: left,
-                            y: spaceBelow > estimatedPopoverHeight ? rect.bottom + 8 : rect.top - 8,
-                            above: spaceBelow <= estimatedPopoverHeight
+                <div role="button" tabindex="0"
+                    onclick={(e) => handleFolderClick(persona.id, e.currentTarget)}
+                    onkeydown={(e) => {
+                        if (e.key === "Enter") {
+                            handleFolderClick(persona.id, e.currentTarget)
                         }
-                    }
-                }}>
+                    }}>
                     {#if !persona.icon}
                         <div class="rounded-md h-20 w-20 shadow-lg bg-textcolor2 cursor-pointer hover:text-green-500 flex items-center justify-center"
-                            class:ring={selectedFolder === persona.id}
-                            style:box-shadow={dragHoverIndex === ind && dragHoverZone === 'left' ? 'inset 4px 0 0 0 rgb(34 197 94)' :
-                                              dragHoverIndex === ind && dragHoverZone === 'right' ? 'inset -4px 0 0 0 rgb(34 197 94)' :
-                                              dragHoverIndex === ind && dragHoverZone === 'center' ? 'inset 0 0 0 4px rgb(59 130 246)' : undefined}>
+                            class:ring={selectedItem?.type === 'folder' && selectedItem.id === persona.id}
+                            style:box-shadow={getDragBoxShadow(ind)}>
                             <svg viewBox="0 0 24 24" width="2em" height="2em">
                                 <path fill="currentColor" d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/>
                             </svg>
@@ -510,16 +498,12 @@
                     {:else}
                         {#await getCharImage(persona.icon, 'css')}
                             <div class="rounded-md h-20 w-20 shadow-lg bg-textcolor2 cursor-pointer hover:text-green-500"
-                                class:ring={selectedFolder === persona.id}
-                                style:box-shadow={dragHoverIndex === ind && dragHoverZone === 'left' ? 'inset 4px 0 0 0 rgb(34 197 94)' :
-                                                  dragHoverIndex === ind && dragHoverZone === 'right' ? 'inset -4px 0 0 0 rgb(34 197 94)' :
-                                                  dragHoverIndex === ind && dragHoverZone === 'center' ? 'inset 0 0 0 4px rgb(59 130 246)' : undefined}></div>
+                                class:ring={selectedItem?.type === 'folder' && selectedItem.id === persona.id}
+                                style:box-shadow={getDragBoxShadow(ind)}></div>
                         {:then im}
                             <div class="rounded-md h-20 w-20 shadow-lg bg-textcolor2 cursor-pointer hover:text-green-500 object-cover object-top" style={im}
-                                class:ring={selectedFolder === persona.id}
-                                style:box-shadow={dragHoverIndex === ind && dragHoverZone === 'left' ? 'inset 4px 0 0 0 rgb(34 197 94)' :
-                                                  dragHoverIndex === ind && dragHoverZone === 'right' ? 'inset -4px 0 0 0 rgb(34 197 94)' :
-                                                  dragHoverIndex === ind && dragHoverZone === 'center' ? 'inset 0 0 0 4px rgb(59 130 246)' : undefined}></div>
+                                class:ring={selectedItem?.type === 'folder' && selectedItem.id === persona.id}
+                                style:box-shadow={getDragBoxShadow(ind)}></div>
                         {/await}
                     {/if}
                 </div>
@@ -591,12 +575,12 @@
                 >
                     <!-- svelte-ignore a11y_no_static_element_interactions -->
                     <div role="button" tabindex="0" onclick={() => {
-                        selectedFolder = null
+                        selectedItem = {type: 'persona', index: persona.index}
                         openFolderPopover = null
                         changeUserPersona(persona.index)
                     }} onkeydown={(e) => {
                         if (e.key === "Enter") {
-                            selectedFolder = null
+                            selectedItem = {type: 'persona', index: persona.index}
                             openFolderPopover = null
                             changeUserPersona(persona.index)
                         }
@@ -617,15 +601,15 @@
     {/if}
 {/if}
 
-{#if selectedFolder}
+{#if selectedItem?.type === 'folder'}
     <!-- Folder Settings UI -->
-    {@const folderData = personaImages.find(p => p.type === 'folder' && p.id === selectedFolder)}
-    {@const folderIndex = getFolderIndex(selectedFolder)}
+    {@const folderData = personaImages.find(p => p.type === 'folder' && p.id === selectedItem.id)}
+    {@const folderIndex = getFolderIndex(selectedItem.id)}
     {@const folderObj = folderIndex !== -1 ? DBState.db.personaOrder[folderIndex] : null}
     {#if folderData && folderData.type === 'folder' && folderObj && typeof folderObj !== 'string'}
         <div class="flex w-full items-starts rounded-md border-darkborderc border p-4 max-w-full flex-wrap">
             <div class="flex flex-col mt-4 mr-4">
-                <button onclick={() => {selectFolderImg(selectedFolder)}}>
+                <button onclick={() => {selectFolderImg(selectedItem.id)}}>
                     {#if !folderData.icon}
                         <div class="rounded-md h-28 w-28 shadow-lg bg-textcolor2 cursor-pointer hover:text-green-500 flex items-center justify-center">
                             <svg viewBox="0 0 24 24" width="3em" height="3em">
@@ -643,14 +627,14 @@
             </div>
             <div class="flex flex-grow flex-col p-2 max-w-full">
                 <span class="text-sm text-textcolor2">{language.name}</span>
-                <TextInput marginBottom size="lg" placeholder="Folder Name" value={folderObj.name} onchange={(e) => updateFolderName(selectedFolder, e.currentTarget.value)}/>
+                <TextInput marginBottom size="lg" placeholder="Folder Name" value={folderObj.name} onchange={(e) => updateFolderName(selectedItem.id, e.currentTarget.value)}/>
                 <div class="flex gap-2 mt-4 max-w-full flex-wrap">
-                    <Button styled="danger" onclick={() => deleteFolder(selectedFolder)}>{language.remove}</Button>
+                    <Button styled="danger" onclick={() => deleteFolder(selectedItem.id)}>{language.remove}</Button>
                 </div>
             </div>
         </div>
     {/if}
-{:else}
+{:else if selectedItem?.type === 'persona'}
     <!-- Persona Settings UI -->
     <div class="flex w-full items-starts rounded-md border-darkborderc border p-4 max-w-full flex-wrap">
         <div class="flex flex-col mt-4 mr-4">
