@@ -568,11 +568,11 @@
 
 <!-- Folder Popover -->
 {#if openFolderPopover}
-    <!-- svelte-ignore a11y_click_events_have_key_keys a11y_no_static_element_interactions -->
+    <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
     <div class="fixed inset-0 z-40 pointer-events-none"></div>
     {@const folderData = personaImages.find(p => p.type === 'folder' && p.id === openFolderPopover.id)}
     {#if folderData && folderData.type === 'folder'}
-        <!-- svelte-ignore a11y_click_events_have_key_keys a11y_no_static_element_interactions -->
+        <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
         <div class="fixed inset-0 z-40" onclick={(e) => {
             if(e.target === e.currentTarget) {
                 openFolderPopover = null
@@ -622,13 +622,14 @@
 
 {#if selectedItem?.type === 'folder'}
     <!-- Folder Settings UI -->
-    {@const folderData = personaImages.find(p => p.type === 'folder' && p.id === selectedItem.id)}
-    {@const folderIndex = getFolderIndex(selectedItem.id)}
+    {@const folderId = selectedItem.id}
+    {@const folderData = personaImages.find(p => p.type === 'folder' && p.id === folderId)}
+    {@const folderIndex = getFolderIndex(folderId)}
     {@const folderObj = folderIndex !== -1 ? DBState.db.personaOrder[folderIndex] : null}
     {#if folderData && folderData.type === 'folder' && folderObj && isFolder(folderObj)}
         <div class="flex w-full items-starts rounded-md border-darkborderc border p-4 max-w-full flex-wrap">
             <div class="flex flex-col mt-4 mr-4">
-                <button onclick={() => {selectFolderImg(selectedItem.id)}}>
+                <button onclick={() => {selectFolderImg(folderId)}}>
                     {#if !folderData.icon}
                         <div class="rounded-md h-28 w-28 shadow-lg bg-textcolor2 cursor-pointer hover:text-green-500 flex items-center justify-center">
                             <svg viewBox="0 0 24 24" width="3em" height="3em">
@@ -646,9 +647,9 @@
             </div>
             <div class="flex flex-grow flex-col p-2 max-w-full">
                 <span class="text-sm text-textcolor2">{language.name}</span>
-                <TextInput marginBottom size="lg" placeholder="Folder Name" value={folderObj.name} onchange={(e) => updateFolderName(selectedItem.id, e.currentTarget.value)}/>
+                <TextInput marginBottom size="lg" placeholder="Folder Name" value={folderObj.name} onchange={(e) => updateFolderName(folderId, e.currentTarget.value)}/>
                 <div class="flex gap-2 mt-4 max-w-full flex-wrap">
-                    <Button styled="danger" onclick={() => deleteFolder(selectedItem.id)}>{language.remove}</Button>
+                    <Button styled="danger" onclick={() => deleteFolder(folderId)}>{language.remove}</Button>
                 </div>
             </div>
         </div>

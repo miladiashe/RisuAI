@@ -1489,7 +1489,6 @@ export interface folder{
 export interface personaFolder{
     name:string
     data:string[]
-    color:string
     id:string
     imgFile?:string
     img?:string
