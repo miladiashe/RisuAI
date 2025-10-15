@@ -21,19 +21,24 @@
     const DROP_ZONE_RIGHT_THRESHOLD = 0.75 // 우측 25%: 오른쪽에 삽입
     // 중간 50%: 폴더 생성
 
+    // Folder popover constants
+    const POPOVER_PADDING = 16
+    const POPOVER_ESTIMATED_HEIGHT = 200
+    const POPOVER_MAX_WIDTH = 448
+
     // DB에 저장되는 폴더 타입
     type FolderData = {
         name: string
         data: string[]  // 페르소나 ID 배열
-        color: string
         id: string
         img?: string
     }
 
     // 화면 표시용 타입
-    type personaTypeNormal = { type:'normal', icon: string, index: number, name:string }
-    type personaType = personaTypeNormal | {type:'folder', folder:personaTypeNormal[], id:string, name:string, color:string, icon?:string}
-    let personaImages: personaType[] = $state([])
+    type PersonaItem = { type:'normal', icon: string, index: number, name:string }
+    type FolderItem = { type:'folder', folder:PersonaItem[], id:string, name:string, icon?:string }
+    type PersonaGridItem = PersonaItem | FolderItem
+    let personaImages: PersonaGridItem[] = $state([])
 
     // 타입 가드
     function isFolder(item: string | FolderData): item is FolderData {
@@ -78,19 +83,17 @@
         selectedItem = {type: 'folder', id: folderId}
         const rect = target.getBoundingClientRect()
         const spaceBelow = window.innerHeight - rect.bottom
-        const estimatedPopoverHeight = 200
-        const PADDING = 16
-        const estimatedPopoverWidth = Math.min(448, window.innerWidth - 32)
+        const estimatedPopoverWidth = Math.min(POPOVER_MAX_WIDTH, window.innerWidth - 32)
 
         let left = rect.left + rect.width / 2 - estimatedPopoverWidth / 2
-        const maxLeft = Math.max(PADDING, window.innerWidth - estimatedPopoverWidth - PADDING)
-        left = Math.max(PADDING, Math.min(left, maxLeft))
+        const maxLeft = Math.max(POPOVER_PADDING, window.innerWidth - estimatedPopoverWidth - POPOVER_PADDING)
+        left = Math.max(POPOVER_PADDING, Math.min(left, maxLeft))
 
         openFolderPopover = {
             id: folderId,
             left: left,
-            y: spaceBelow > estimatedPopoverHeight ? rect.bottom + 8 : rect.top - 8,
-            above: spaceBelow <= estimatedPopoverHeight
+            y: spaceBelow > POPOVER_ESTIMATED_HEIGHT ? rect.bottom + 8 : rect.top - 8,
+            above: spaceBelow <= POPOVER_ESTIMATED_HEIGHT
         }
     }
 
@@ -238,7 +241,6 @@
             const newFolder: FolderData = {
                 name: "New Folder",
                 data: [mainItem, targetItem],
-                color: "",
                 id: v4()
             }
             db.personaOrder[targetIndex.index] = newFolder
@@ -384,7 +386,6 @@
         if (popoverElement && openFolderPopover) {
             const rect = popoverElement.getBoundingClientRect()
             const actualWidth = rect.width
-            const PADDING = 16
 
             // 팝오버를 연 폴더의 위치를 찾아야 함
             const folderData = personaImages.find(p => p.type === 'folder' && p.id === openFolderPopover.id)
@@ -399,8 +400,8 @@
                     let left = folderRect.left + folderRect.width / 2 - actualWidth / 2
 
                     // 화면 경계 체크
-                    const maxLeft = window.innerWidth - actualWidth - PADDING
-                    left = Math.max(PADDING, Math.min(left, maxLeft))
+                    const maxLeft = window.innerWidth - actualWidth - POPOVER_PADDING
+                    left = Math.max(POPOVER_PADDING, Math.min(left, maxLeft))
 
                     // 위치가 달라졌으면 업데이트
                     if (Math.abs(left - openFolderPopover.left) > 1) {
@@ -415,7 +416,7 @@
     })
 
     $effect(() => {
-        let newPersonaImages: personaType[] = [];
+        let newPersonaImages: PersonaGridItem[] = [];
         const idObject = getPersonaIndexObject()
         for (const id of DBState.db.personaOrder) {
           if(typeof(id) === 'string'){
@@ -432,7 +433,7 @@
           }
           else{
             const folder = id
-            let folderPersonaImages: personaTypeNormal[] = []
+            let folderPersonaImages: PersonaItem[] = []
             for(const id of folder.data){
               const index = idObject[id] ?? -1
               if(index !== -1){
@@ -450,7 +451,6 @@
               type: "folder",
               id: folder.id,
               name: folder.name,
-              color: folder.color,
               icon: folder.img,
             });
           }
