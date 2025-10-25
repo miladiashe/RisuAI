@@ -133,7 +133,8 @@ export async function checkDriver(type:'save'|'load'|'loadtauri'|'savetauri'|'re
 
             // Tauri에서도 코드를 토큰으로 교환하고 저장
             try {
-                const res = await fetch(`/drive?code=${encodeURIComponent(code)}`)
+                // OAuth 인증 시 사용한 redirect_uri와 동일한 값을 전달
+                const res = await fetch(hubURL + `/drive?code=${encodeURIComponent(code)}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}`)
                 if(res.status >= 200 && res.status < 300){
                     const json:{
                         access_token:string,
@@ -176,9 +177,15 @@ export async function checkDriverInit() {
     try {
         const loc = new URLSearchParams(location.search)
         const code = loc.get('code')
-    
+
         if(code){
-            const res = await fetch(`/drive?code=${encodeURIComponent(code)}`)
+            // state에서 type 추출하여 redirect_uri 결정
+            const state = loc.get('state')
+            const redirectUri = state === 'reftoken' || state === 'accesstauri'
+                ? 'https://sv.risuai.xyz/drive'
+                : 'https://risuai.xyz/'
+
+            const res = await fetch(hubURL + `/drive?code=${encodeURIComponent(code)}&redirect_uri=${encodeURIComponent(redirectUri)}`)
             if(res.status >= 200 && res.status < 300){
                 const json:{
                     access_token:string,
