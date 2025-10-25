@@ -11,5 +11,25 @@ services:
     volumes:
       - risuai-save:/app/save
 
+  backup:
+    image: mazzolino/restic:latest
+    container_name: risuai-backup
+    restart: unless-stopped
+    hostname: risuai-backup
+    environment:
+      - RESTIC_REPOSITORY=/backup-repo
+      - RESTIC_PASSWORD_FILE=/run/secrets/restic_password
+      - BACKUP_CRON=0 2 * * *  # 매일 새벽 2시에 백업
+      - RESTIC_BACKUP_SOURCES=/data
+      - RESTIC_BACKUP_ARGS=--verbose --tag docker --exclude-caches
+      - RESTIC_FORGET_ARGS=--keep-last 7 --keep-daily 7 --keep-weekly 4 --keep-monthly 6
+      - TZ=Asia/Seoul
+    volumes:
+      - risuai-save:/data:ro  # 백업할 데이터 (읽기 전용)
+      - ./backup:/backup-repo  # 백업 저장소 위치
+      - ./restic-password.txt:/run/secrets/restic_password:ro  # 암호화 비밀번호
+    depends_on:
+      - risuai
+
 volumes:
   risuai-save:
