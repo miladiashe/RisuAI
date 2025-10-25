@@ -37,6 +37,9 @@ async function refreshAccessToken(refreshToken: string): Promise<{
     }
 }
 
+// Race condition 방지를 위한 Promise 캐시
+let refreshPromise: Promise<string | null> | null = null
+
 /**
  * 유효한 access token을 반환합니다.
  * 만료되었으면 refresh token으로 자동 갱신합니다.
@@ -51,22 +54,39 @@ async function getValidAccessToken(): Promise<string | null> {
                      db.google.tokenExpiresAt < now + (5 * 60 * 1000)
 
     if (isExpired) {
+        // 이미 refresh 중이면 같은 Promise를 반환
+        if (refreshPromise) {
+            console.log('Token refresh already in progress, waiting...')
+            return refreshPromise
+        }
+
         // Refresh token이 있으면 갱신 시도
         if (db.google.refreshToken) {
             console.log('Access token expired or missing, refreshing...')
-            const newToken = await refreshAccessToken(db.google.refreshToken)
 
-            if (newToken) {
-                // 새 토큰 저장
-                db.google.accessToken = newToken.access_token
-                db.google.tokenExpiresAt = Date.now() + (newToken.expires_in * 1000)
-                setDatabase(db)
-                console.log('Token refreshed successfully')
-                return newToken.access_token
-            } else {
-                console.error('Failed to refresh token')
-                return null
-            }
+            refreshPromise = (async () => {
+                try {
+                    const newToken = await refreshAccessToken(db.google.refreshToken!)
+
+                    if (newToken) {
+                        // 새 토큰 저장
+                        const db = getDatabase()
+                        db.google.accessToken = newToken.access_token
+                        db.google.tokenExpiresAt = Date.now() + (newToken.expires_in * 1000)
+                        setDatabase(db)
+                        console.log('Token refreshed successfully')
+                        return newToken.access_token
+                    } else {
+                        console.error('Failed to refresh token')
+                        return null
+                    }
+                } finally {
+                    // refresh 완료 후 Promise 캐시 초기화
+                    refreshPromise = null
+                }
+            })()
+
+            return refreshPromise
         } else {
             console.error('No refresh token available')
             return null
@@ -217,6 +237,9 @@ export async function syncDrive() {
 
 
 async function backupDrive(ACCESS_TOKEN:string) {
+    // 토큰을 let으로 변경하여 중간에 갱신 가능하도록
+    let token = ACCESS_TOKEN
+
     alertStore.set({
         type: "wait",
         msg: "Uploading Backup..."
@@ -235,7 +258,11 @@ async function backupDrive(ACCESS_TOKEN:string) {
         return
     }
 
-    const files:DriveFile[] = await getFilesInFolder(ACCESS_TOKEN)
+    // 파일 목록 조회 전 토큰 체크 및 갱신
+    const refreshedTokenBeforeCheck = await getValidAccessToken()
+    if (refreshedTokenBeforeCheck) token = refreshedTokenBeforeCheck
+
+    const files:DriveFile[] = await getFilesInFolder(token)
 
     const fileNames = files.map((d) => {
         return d.name
@@ -256,7 +283,10 @@ async function backupDrive(ACCESS_TOKEN:string) {
             }
             const formatedKey = newFormatKeys(key)
             if(!fileNames.includes(formatedKey)){
-                await createFileInFolder(ACCESS_TOKEN, formatedKey, await readFile('assets/' + asset.name, {baseDir: BaseDirectory.AppData}))
+                // 각 파일 업로드 전 토큰 체크 및 갱신
+                const refreshedToken = await getValidAccessToken()
+                if (refreshedToken) token = refreshedToken
+                await createFileInFolder(token, formatedKey, await readFile('assets/' + asset.name, {baseDir: BaseDirectory.AppData}))
             }
         }
     }
@@ -274,7 +304,10 @@ async function backupDrive(ACCESS_TOKEN:string) {
             }
             const formatedKey = newFormatKeys(key)
             if(!fileNames.includes(formatedKey)){
-                await createFileInFolder(ACCESS_TOKEN, formatedKey, await forageStorage.getItem(key) as unknown as Uint8Array)
+                // 각 파일 업로드 전 토큰 체크 및 갱신
+                const refreshedToken = await getValidAccessToken()
+                if (refreshedToken) token = refreshedToken
+                await createFileInFolder(token, formatedKey, await forageStorage.getItem(key) as unknown as Uint8Array)
             }
         }
     }
@@ -286,7 +319,10 @@ async function backupDrive(ACCESS_TOKEN:string) {
         msg: `Uploading Backup... (Saving database)`
     })
 
-    await createFileInFolder(ACCESS_TOKEN, `${(Date.now() / 1000).toFixed(0)}-database.risudat`, dbData)
+    // 데이터베이스 업로드 전 토큰 체크 및 갱신
+    const refreshedTokenBeforeUpload = await getValidAccessToken()
+    if (refreshedTokenBeforeUpload) token = refreshedTokenBeforeUpload
+    await createFileInFolder(token, `${(Date.now() / 1000).toFixed(0)}-database.risudat`, dbData)
 
 
     alertNormal('Success')
@@ -299,13 +335,21 @@ type DriveFile = {
 }
 
 async function loadDrive(ACCESS_TOKEN:string, mode: 'backup'|'sync'):Promise<void|"noSync"> {
+    // 토큰을 let으로 변경하여 중간에 갱신 가능하도록
+    let token = ACCESS_TOKEN
+
     if(mode === 'backup'){
         alertStore.set({
             type: "wait",
             msg: "Loading Backup..."
         })
     }
-    const files:DriveFile[] = await getFilesInFolder(ACCESS_TOKEN)
+
+    // 파일 목록 조회 전 토큰 체크 및 갱신
+    const refreshedToken = await getValidAccessToken()
+    if (refreshedToken) token = refreshedToken
+
+    const files:DriveFile[] = await getFilesInFolder(token)
     let foragekeys:string[] = []
     let loadedForageKeys = false
     let db = getDatabase()
@@ -390,16 +434,23 @@ async function loadDrive(ACCESS_TOKEN:string, mode: 'backup'|'sync'):Promise<voi
             }
             const selectedIndex = (await alertSelect([language.loadLatest, language.loadOthers]) === '0') ? 0 : parseInt(await alertSelect(selectables))
             const selectedDb = dbs[selectedIndex][0]
-            const decompressedDb:Database = await decodeRisuSave(await getFileData(ACCESS_TOKEN, selectedDb.id))
+            // 데이터베이스 파일 다운로드 전 토큰 체크 및 갱신
+            const refreshedToken = await getValidAccessToken()
+            if (refreshedToken) token = refreshedToken
+            const decompressedDb:Database = await decodeRisuSave(await getFileData(token, selectedDb.id))
             return decompressedDb
         }
-    
-        const db:Database = mode === 'backup' ? await getDbFromList() : JSON.parse(Buffer.from(await getFileData(ACCESS_TOKEN, dbs[0][0].id)).toString('utf-8'))
+
+        // 데이터베이스 파일 다운로드 전 토큰 체크 및 갱신 (sync 모드용)
+        if (mode === 'sync') {
+            const refreshedToken = await getValidAccessToken()
+            if (refreshedToken) token = refreshedToken
+        }
+        const db:Database = mode === 'backup' ? await getDbFromList() : JSON.parse(Buffer.from(await getFileData(token, dbs[0][0].id)).toString('utf-8'))
         lastSaved = Date.now()
         localStorage.setItem('risu_lastsaved', `${lastSaved}`)
         const requiredImages = (getUnpargeables(db))
         let ind = 0;
-        let errorLogs:string[] = []
         for(const images of requiredImages){
             ind += 1
             for(let tries=0;tries<3;tries++){
@@ -424,10 +475,13 @@ async function loadDrive(ACCESS_TOKEN:string, mode: 'backup'|'sync'):Promise<voi
                         if(fileNames.includes(formatedImage)){
                             for(const file of files){
                                 if(file.name === formatedImage){
-                                    const fData = await getFileData(ACCESS_TOKEN, file.id)
+                                    // 각 파일 다운로드 전 토큰 체크 및 갱신
+                                    const refreshedToken = await getValidAccessToken()
+                                    if (refreshedToken) token = refreshedToken
+                                    const fData = await getFileData(token, file.id)
                                     if(isTauri){
                                         await writeFile(`assets/` + images, fData ,{baseDir: BaseDirectory.AppData})
-        
+
                                     }
                                     else{
                                         await forageStorage.setItem('assets/' + images, fData)
