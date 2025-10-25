@@ -421,6 +421,8 @@ export function setDatabase(data:Database){
     data.google ??= {}
     data.google.accessToken ??= ''
     data.google.projectId ??= ''
+    data.google.refreshToken ??= ''
+    data.google.tokenExpiresAt ??= 0
     data.genTime ??= 1
     data.promptSettings ??= {
         assistantPrefill: '',
@@ -868,6 +870,8 @@ export interface Database{
     google: {
         accessToken: string
         projectId: string
+        refreshToken?: string
+        tokenExpiresAt?: number
     }
     mistralKey?:string
     chainOfThought?:boolean
