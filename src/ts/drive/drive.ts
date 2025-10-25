@@ -1,5 +1,5 @@
 import { alertError, alertInput, alertNormal, alertSelect, alertStore } from "../alert";
-import { getDatabase, type Database } from "../storage/database.svelte";
+import { getDatabase, setDatabase, type Database } from "../storage/database.svelte";
 import { forageStorage, getUnpargeables, isTauri, openURL } from "../globalApi.svelte";
 import { BaseDirectory, exists, readFile, readDir, writeFile } from "@tauri-apps/plugin-fs";
 import { language } from "../../lang";
@@ -8,16 +8,108 @@ import { sleep } from "../util";
 import { hubURL } from "../characterCards";
 import { decodeRisuSave, encodeRisuSaveLegacy } from "../storage/risuSave";
 
+/**
+ * Refresh token을 사용해 새로운 access token을 받습니다
+ */
+async function refreshAccessToken(refreshToken: string): Promise<{
+    access_token: string,
+    expires_in: number
+} | null> {
+    try {
+        const response = await fetch(hubURL + '/drive/refresh', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ refresh_token: refreshToken })
+        })
+
+        if (response.ok) {
+            const json = await response.json()
+            return json
+        } else {
+            console.error('Failed to refresh token:', await response.text())
+            return null
+        }
+    } catch (error) {
+        console.error('Error refreshing token:', error)
+        return null
+    }
+}
+
+/**
+ * 유효한 access token을 반환합니다.
+ * 만료되었으면 refresh token으로 자동 갱신합니다.
+ */
+async function getValidAccessToken(): Promise<string | null> {
+    const db = getDatabase()
+    const now = Date.now()
+
+    // Access token이 없거나 만료되었는지 확인 (5분 여유를 둠)
+    const isExpired = !db.google.accessToken ||
+                     !db.google.tokenExpiresAt ||
+                     db.google.tokenExpiresAt < now + (5 * 60 * 1000)
+
+    if (isExpired) {
+        // Refresh token이 있으면 갱신 시도
+        if (db.google.refreshToken) {
+            console.log('Access token expired or missing, refreshing...')
+            const newToken = await refreshAccessToken(db.google.refreshToken)
+
+            if (newToken) {
+                // 새 토큰 저장
+                db.google.accessToken = newToken.access_token
+                db.google.tokenExpiresAt = Date.now() + (newToken.expires_in * 1000)
+                setDatabase(db)
+                console.log('Token refreshed successfully')
+                return newToken.access_token
+            } else {
+                console.error('Failed to refresh token')
+                return null
+            }
+        } else {
+            console.error('No refresh token available')
+            return null
+        }
+    }
+
+    // 유효한 토큰이 있으면 그대로 반환
+    return db.google.accessToken
+}
+
 export async function checkDriver(type:'save'|'load'|'loadtauri'|'savetauri'|'reftoken'){
+    // 먼저 저장된 refresh token이 있는지 확인
+    const db = getDatabase()
+    const hasRefreshToken = !!db.google.refreshToken
+
+    // refresh token이 있으면 재인증 없이 바로 실행
+    if (hasRefreshToken && (type === 'save' || type === 'load' || type === 'loadtauri' || type === 'savetauri')) {
+        try {
+            const validToken = await getValidAccessToken()
+            if (validToken) {
+                if(type === 'save' || type === 'savetauri'){
+                    await backupDrive(validToken)
+                }
+                else if(type === 'load' || type === 'loadtauri'){
+                    await loadDrive(validToken, 'backup')
+                }
+                return
+            }
+        } catch (error) {
+            console.error('Error using stored token:', error)
+            // 실패하면 아래 OAuth 인증으로 계속 진행
+        }
+    }
+
     const CLIENT_ID = '580075990041-l26k2d3c0nemmqiu3d3aag01npfrkn76.apps.googleusercontent.com';
     const REDIRECT_URI = type === 'reftoken' ? 'https://sv.risuai.xyz/drive' : "https://risuai.xyz/"
     const SCOPE = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.appdata';
     const encodedRedirectUri = encodeURIComponent(REDIRECT_URI);
-    const authorizationUrl = `https://accounts.google.com/o/oauth2/auth?client_id=${CLIENT_ID}&redirect_uri=${encodedRedirectUri}&scope=${SCOPE}&response_type=code&state=${type}`;
-    
+    const state = type === 'reftoken' ? 'accesstauri' : type
+    const authorizationUrl = `https://accounts.google.com/o/oauth2/auth?client_id=${CLIENT_ID}&redirect_uri=${encodedRedirectUri}&scope=${SCOPE}&response_type=code&state=${state}&access_type=offline&prompt=consent`;
+
 
     if(type === 'reftoken'){
-        const authorizationUrl = `https://accounts.google.com/o/oauth2/auth?client_id=${CLIENT_ID}&redirect_uri=${encodedRedirectUri}&scope=${SCOPE}&response_type=code&state=${"accesstauri"}&access_type=offline&prompt=consent`;
         return authorizationUrl
     }
 
@@ -61,8 +153,19 @@ export async function checkDriverInit() {
             if(res.status >= 200 && res.status < 300){
                 const json:{
                     access_token:string,
-                    expires_in:number
+                    expires_in:number,
+                    refresh_token?:string
                 } = await res.json()
+
+                // Refresh token을 데이터베이스에 저장
+                const db = getDatabase()
+                db.google.accessToken = json.access_token
+                db.google.tokenExpiresAt = Date.now() + (json.expires_in * 1000)
+                if(json.refresh_token){
+                    db.google.refreshToken = json.refresh_token
+                }
+                setDatabase(db)
+
                 const da = loc.get('state')
                 if(da === 'save'){
                     await backupDrive(json.access_token)
