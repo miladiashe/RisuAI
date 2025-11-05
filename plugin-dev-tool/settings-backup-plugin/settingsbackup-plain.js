@@ -9,6 +9,11 @@
 
 console.log('Settings Backup Plugin: Initializing...');
 
+// Debug: Check if functions are available
+console.log('Debug: typeof getDatabase =', typeof getDatabase);
+console.log('Debug: typeof setDatabase =', typeof setDatabase);
+console.log('Debug: typeof onUnload =', typeof onUnload);
+
 // Export Settings Function
 function exportSettings() {
     console.log('Settings Backup: Exporting settings...');
@@ -72,6 +77,10 @@ function importSettings() {
         }
 
         try {
+            // Debug: Check if functions are available in async context
+            console.log('Debug (async): typeof getDatabase =', typeof getDatabase);
+            console.log('Debug (async): typeof setDatabase =', typeof setDatabase);
+
             // Read file
             const text = await file.text();
             const importedSettings = JSON.parse(text);
