@@ -7,7 +7,7 @@ export function exportSettings() {
 
     try {
         // Get current database
-        const db = getDatabase();
+        const db = (globalThis as any).getDatabase();
 
         // Create a copy excluding characters
         const settingsBackup = {

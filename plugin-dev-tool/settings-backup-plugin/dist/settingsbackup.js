@@ -8,7 +8,7 @@
   function exportSettings() {
     console.log("Settings Backup: Exporting settings...");
     try {
-      const db = getDatabase();
+      const db = globalThis.getDatabase();
       const settingsBackup = {
         ...db,
         characters: void 0,
@@ -67,7 +67,7 @@ Continue?`
           console.log("Settings Backup: Import cancelled by user");
           return;
         }
-        const db = getDatabase();
+        const db = globalThis.getDatabase();
         const currentCharacters = db.characters;
         delete importedSettings.exportDate;
         delete importedSettings.exportVersion;
@@ -76,7 +76,7 @@ Continue?`
           ...importedSettings,
           characters: currentCharacters
         };
-        setDatabase(mergedDb);
+        globalThis.setDatabase(mergedDb);
         console.log("Settings Backup: Import successful!");
         alert("\u2705 Settings imported successfully!\n\n\u26A0\uFE0F Please refresh the page to apply changes.");
       } catch (error) {

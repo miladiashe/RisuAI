@@ -41,7 +41,7 @@ export function importSettings() {
             }
 
             // Get current database
-            const db = getDatabase();
+            const db = (globalThis as any).getDatabase();
 
             // Preserve current characters
             const currentCharacters = db.characters;
@@ -58,7 +58,7 @@ export function importSettings() {
             };
 
             // Save merged database
-            setDatabase(mergedDb);
+            (globalThis as any).setDatabase(mergedDb);
 
             console.log('Settings Backup: Import successful!');
             alert('✅ Settings imported successfully!\n\n⚠️ Please refresh the page to apply changes.');

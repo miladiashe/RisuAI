@@ -79,6 +79,25 @@ declare function getArg(name: string): string | number;
 declare function setArg(name: string, value: string | number): void;
 
 /**
+ * Gets the entire database
+ * @returns The complete RisuAI database object
+ * @example
+ * const db = getDatabase();
+ * console.log(db.temperature, db.mainPrompt);
+ */
+declare function getDatabase(): any;
+
+/**
+ * Sets the entire database
+ * @param db - The database object to set
+ * @example
+ * const db = getDatabase();
+ * db.temperature = 80;
+ * setDatabase(db);
+ */
+declare function setDatabase(db: any): void;
+
+/**
  * Gets the current character
  * @returns Current character or group chat
  */
