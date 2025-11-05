@@ -118,10 +118,13 @@ async function buildPlugin(projectDir: string, outputFile?: string) {
             entryPoints: [entryPoint],
             bundle: true,
             platform: 'browser',
-            format: 'iife',
+            // Don't wrap in IIFE - RisuAI wraps plugin code itself
+            // format: 'iife',
             outfile: tempOutPath,
             target: 'es2020',
             minify: false,
+            // Make sure external globals are accessible
+            globalName: undefined,
         });
     } catch (error) {
         console.error('❌ Error bundling TypeScript:', error);
@@ -129,7 +132,17 @@ async function buildPlugin(projectDir: string, outputFile?: string) {
     }
 
     // Read bundled code
-    const bundledCode = fs.readFileSync(tempOutPath, 'utf-8');
+    let bundledCode = fs.readFileSync(tempOutPath, 'utf-8');
+
+    // Remove IIFE wrapper if present
+    // esbuild wraps code in (() => { ... })() even without format specified
+    // RisuAI wraps plugin code itself, so we need to unwrap it
+    const iifePattern = /^\s*"use strict";\s*\(\(\)\s*=>\s*\{([\s\S]*)\}\)\(\);\s*$/;
+    const match = bundledCode.match(iifePattern);
+    if (match) {
+        bundledCode = match[1].trim();
+        console.log('   Unwrapped IIFE for RisuAI compatibility');
+    }
 
     // Clean up temp file
     fs.unlinkSync(tempOutPath);

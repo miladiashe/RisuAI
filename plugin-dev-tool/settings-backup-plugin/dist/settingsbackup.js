@@ -2,13 +2,11 @@
 //@display-name Settings Backup & Restore
 //@link https://github.com/miladiashe/risuai-plugin-builder Plugin Builder Repository
 
-"use strict";
-(() => {
-  // src/export.ts
+// src/export.ts
   function exportSettings() {
     console.log("Settings Backup: Exporting settings...");
     try {
-      const db = globalThis.getDatabase();
+      const db = getDatabase();
       const settingsBackup = {
         ...db,
         characters: void 0,
@@ -67,7 +65,7 @@ Continue?`
           console.log("Settings Backup: Import cancelled by user");
           return;
         }
-        const db = globalThis.getDatabase();
+        const db = getDatabase();
         const currentCharacters = db.characters;
         delete importedSettings.exportDate;
         delete importedSettings.exportVersion;
@@ -76,7 +74,7 @@ Continue?`
           ...importedSettings,
           characters: currentCharacters
         };
-        globalThis.setDatabase(mergedDb);
+        setDatabase(mergedDb);
         console.log("Settings Backup: Import successful!");
         alert("\u2705 Settings imported successfully!\n\n\u26A0\uFE0F Please refresh the page to apply changes.");
       } catch (error) {
@@ -176,4 +174,3 @@ Continue?`
     console.log("Settings Backup Plugin: Cleaning up...");
   });
   console.log("Settings Backup Plugin: Initialized successfully!");
-})();

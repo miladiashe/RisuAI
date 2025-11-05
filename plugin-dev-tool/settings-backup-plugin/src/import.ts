@@ -41,7 +41,8 @@ export function importSettings() {
             }
 
             // Get current database
-            const db = (globalThis as any).getDatabase();
+            // @ts-ignore - getDatabase is a global function provided by RisuAI
+            const db = getDatabase();
 
             // Preserve current characters
             const currentCharacters = db.characters;
@@ -58,7 +59,8 @@ export function importSettings() {
             };
 
             // Save merged database
-            (globalThis as any).setDatabase(mergedDb);
+            // @ts-ignore - setDatabase is a global function provided by RisuAI
+            setDatabase(mergedDb);
 
             console.log('Settings Backup: Import successful!');
             alert('✅ Settings imported successfully!\n\n⚠️ Please refresh the page to apply changes.');

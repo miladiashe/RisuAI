@@ -7,7 +7,8 @@ export function exportSettings() {
 
     try {
         // Get current database
-        const db = (globalThis as any).getDatabase();
+        // @ts-ignore - getDatabase is a global function provided by RisuAI
+        const db = getDatabase();
 
         // Create a copy excluding characters
         const settingsBackup = {
