@@ -12,6 +12,7 @@ console.log('Settings Backup Plugin: Initializing...');
 // Debug: Check if functions are available
 console.log('Debug: typeof getDatabase =', typeof getDatabase);
 console.log('Debug: typeof setDatabase =', typeof setDatabase);
+console.log('Debug: typeof setDatabaseLite =', typeof setDatabaseLite);
 console.log('Debug: typeof onUnload =', typeof onUnload);
 
 // Export Settings Function
@@ -80,6 +81,7 @@ function importSettings() {
             // Debug: Check if functions are available in async context
             console.log('Debug (async): typeof getDatabase =', typeof getDatabase);
             console.log('Debug (async): typeof setDatabase =', typeof setDatabase);
+            console.log('Debug (async): typeof setDatabaseLite =', typeof setDatabaseLite);
 
             // Read file
             const text = await file.text();
@@ -122,7 +124,16 @@ function importSettings() {
             };
 
             // Save merged database
-            setDatabase(mergedDb);
+            // Try setDatabaseLite first (used internally by RisuAI)
+            if (typeof setDatabaseLite !== 'undefined') {
+                console.log('Using setDatabaseLite');
+                setDatabaseLite(mergedDb);
+            } else if (typeof setDatabase !== 'undefined') {
+                console.log('Using setDatabase');
+                setDatabase(mergedDb);
+            } else {
+                throw new Error('No database setter function available (tried setDatabaseLite and setDatabase)');
+            }
 
             console.log('Settings Backup: Import successful!');
             alert('✅ Settings imported successfully!\n\n⚠️ Please refresh the page to apply changes.');
