@@ -3147,10 +3147,11 @@
       const zipBlob = await zip.generateAsync({ type: "blob" });
       const filename = `risuai-settings-v3-${(/* @__PURE__ */ new Date()).toISOString().split("T")[0]}.zip`;
       let downloadSuccessful = false;
-      if (navigator.share && navigator.canShare) {
+      if (navigator.share) {
         try {
           const file = new File([zipBlob], filename, { type: "application/zip" });
-          if (navigator.canShare({ files: [file] })) {
+          const canShareFiles = navigator.canShare ? navigator.canShare({ files: [file] }) : true;
+          if (canShareFiles) {
             await navigator.share({
               files: [file],
               title: "RisuAI Settings Backup",
@@ -3160,7 +3161,12 @@
             console.log("Settings Backup v3: Exported via Web Share API");
           }
         } catch (error) {
-          console.warn("Web Share API failed, trying fallback:", error);
+          if (error instanceof Error && error.name === "AbortError") {
+            console.log("User cancelled share");
+            downloadSuccessful = true;
+          } else {
+            console.warn("Web Share API failed, trying fallback:", error);
+          }
         }
       }
       if (!downloadSuccessful) {
@@ -3170,12 +3176,25 @@
           a.href = url;
           a.download = filename;
           a.style.display = "none";
+          a.target = "_blank";
+          a.rel = "noopener noreferrer";
           document.body.appendChild(a);
-          a.click();
+          if (a.click) {
+            a.click();
+          } else {
+            const clickEvent = new MouseEvent("click", {
+              view: window,
+              bubbles: true,
+              cancelable: true
+            });
+            a.dispatchEvent(clickEvent);
+          }
           setTimeout(() => {
-            document.body.removeChild(a);
+            if (a.parentElement) {
+              document.body.removeChild(a);
+            }
             URL.revokeObjectURL(url);
-          }, 1e3);
+          }, 3e3);
           downloadSuccessful = true;
           console.log("Settings Backup v3: Exported via a.click()");
         } catch (error) {
@@ -3185,16 +3204,27 @@
       if (!downloadSuccessful) {
         try {
           const url = URL.createObjectURL(zipBlob);
-          window.open(url);
-          setTimeout(() => URL.revokeObjectURL(url), 1e3);
+          const opened = window.open(url, "_blank");
+          if (!opened) {
+            window.location.href = url;
+          }
+          setTimeout(() => URL.revokeObjectURL(url), 3e3);
+          downloadSuccessful = true;
           console.log("Settings Backup v3: Exported via window.open()");
         } catch (error) {
-          throw new Error("All download methods failed. Please try a different browser.");
+          console.error("All download methods failed:", error);
+          removeLoadingOverlay();
+          alert("\u274C Download failed. Your browser may be blocking downloads. Please check browser settings or try a different browser.");
+          return;
         }
       }
       removeLoadingOverlay();
       console.log("Settings Backup v3: Export successful!");
-      alert("\u2705 Settings exported successfully!");
+      if (navigator.share && downloadSuccessful) {
+        console.log("Export completed via share dialog");
+      } else {
+        alert("\u2705 Settings exported successfully!\n\nCheck your Downloads folder for the ZIP file.");
+      }
     } catch (error) {
       removeLoadingOverlay();
       console.error("Settings Backup v3: Export failed", error);
