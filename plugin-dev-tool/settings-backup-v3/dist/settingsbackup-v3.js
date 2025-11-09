@@ -3025,10 +3025,10 @@
                 continue;
               }
               const ext = assetExt || "png";
-              moduleFolder.file(`${assetId}.${ext}`, base64Data, { base64: true });
-              console.log(`\u2713 [${processedAssets}/${totalAssets}] ${moduleId}/${assetId}.${ext}`);
+              const filename = assetId.endsWith(`.${ext}`) ? assetId : `${assetId}.${ext}`;
+              moduleFolder.file(filename, base64Data, { base64: true });
+              console.log(`\u2713 [${processedAssets}/${totalAssets}] ${moduleId}/${filename}`);
             } catch (error) {
-              console.warn(`Error processing asset ${moduleId}-${i}:`, error);
             }
           }
         }
