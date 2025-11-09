@@ -2814,11 +2814,14 @@
       const db = getDatabase();
       const moduleAssets = {};
       if (db.modules && Array.isArray(db.modules)) {
+        console.log(`Total modules in database: ${db.modules.length}`);
         for (const module of db.modules) {
           if (module.assets && Array.isArray(module.assets)) {
             moduleAssets[module.id] = module.assets;
+            console.log(`Module ${module.id}: ${module.assets.length} assets`);
           }
         }
+        console.log(`Modules with assets: ${Object.keys(moduleAssets).length}`);
       }
       const settingsBackup = {
         ...db,
