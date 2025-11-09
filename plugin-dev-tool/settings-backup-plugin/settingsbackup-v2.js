@@ -2770,38 +2770,54 @@
       zip.file("settings.json", jsonString);
       const assetsFolder = zip.folder("module-assets");
       if (assetsFolder) {
-        for (const [moduleId, assets] of Object.entries(moduleAssets)) {
-          for (let i = 0; i < assets.length; i++) {
-            try {
-              const asset = assets[i];
-              if (!asset || !Array.isArray(asset)) {
-                continue;
-              }
-              const assetId = asset[0];
-              const assetData = asset[1];
-              const assetExt = asset[2] || "png";
-              if (!assetData || typeof assetData !== "string" || assetData.length === 0) {
-                console.warn(`Skipping empty asset: ${moduleId}-${i}`);
-                continue;
-              }
-              let base64Data;
-              if (assetData.startsWith("data:")) {
-                const parts = assetData.split(",");
-                if (parts.length < 2) {
-                  console.warn(`Invalid data URI for asset: ${moduleId}-${i}`);
+        const storage = typeof localforage !== "undefined" ? localforage.createInstance({ name: "risuai" }) : null;
+        if (!storage) {
+          console.warn("localforage not available, skipping module assets");
+        } else {
+          for (const [moduleId, assets] of Object.entries(moduleAssets)) {
+            for (let i = 0; i < assets.length; i++) {
+              try {
+                const asset = assets[i];
+                if (!asset || !Array.isArray(asset)) {
                   continue;
                 }
-                base64Data = parts[1];
-              } else {
-                base64Data = assetData;
+                const assetId = asset[0];
+                const storageKey = asset[1];
+                const assetExt = asset[2] || "png";
+                if (!storageKey || typeof storageKey !== "string" || storageKey.length === 0) {
+                  console.warn(`Skipping asset with empty storage key: ${moduleId}-${i}`);
+                  continue;
+                }
+                const assetData = await storage.getItem(storageKey);
+                if (!assetData) {
+                  console.warn(`Asset data not found in storage: ${storageKey}`);
+                  continue;
+                }
+                let base64Data;
+                if (assetData instanceof Uint8Array || assetData instanceof ArrayBuffer) {
+                  const uint8Array = assetData instanceof ArrayBuffer ? new Uint8Array(assetData) : assetData;
+                  const binaryString = Array.from(uint8Array).map((byte) => String.fromCharCode(byte)).join("");
+                  base64Data = btoa(binaryString);
+                } else if (typeof assetData === "string") {
+                  if (assetData.startsWith("data:")) {
+                    const parts = assetData.split(",");
+                    if (parts.length < 2) {
+                      console.warn(`Invalid data URI for asset: ${moduleId}-${i}`);
+                      continue;
+                    }
+                    base64Data = parts[1];
+                  } else {
+                    base64Data = assetData;
+                  }
+                } else {
+                  console.warn(`Unknown asset data format for ${moduleId}-${i}:`, typeof assetData);
+                  continue;
+                }
+                assetsFolder.file(`${moduleId}-${i}.${assetExt}`, base64Data, { base64: true });
+                console.log(`Added asset: ${moduleId}-${i}.${assetExt}`);
+              } catch (assetError) {
+                console.warn(`Error processing asset ${moduleId}-${i}:`, assetError);
               }
-              if (!/^[A-Za-z0-9+/=]+$/.test(base64Data)) {
-                console.warn(`Invalid base64 data for asset: ${moduleId}-${i}`);
-                continue;
-              }
-              assetsFolder.file(`${moduleId}-${i}.${assetExt}`, base64Data, { base64: true });
-            } catch (assetError) {
-              console.warn(`Error processing asset ${moduleId}-${i}:`, assetError);
             }
           }
         }
@@ -2864,24 +2880,35 @@ Continue?`
         const currentCharacters = db.characters;
         const currentCharacterOrder = db.characterOrder;
         const moduleAssets = {};
+        const storage = typeof localforage !== "undefined" ? localforage.createInstance({ name: "risuai" }) : null;
         const assetsFolder = zip.folder("module-assets");
         if (assetsFolder) {
           const assetFiles = Object.keys(zip.files).filter((name) => name.startsWith("module-assets/"));
-          for (const assetPath of assetFiles) {
-            const file2 = zip.file(assetPath);
-            if (file2 && !file2.dir) {
-              const filename = assetPath.split("/")[1];
-              const match = filename.match(/^(.+?)-(\d+)\.(.+)$/);
-              if (match) {
-                const moduleId = match[1];
-                const index = parseInt(match[2]);
-                const ext = match[3];
-                const assetData = await file2.async("base64");
-                const assetId = `asset-${moduleId}-${index}`;
-                if (!moduleAssets[moduleId]) {
-                  moduleAssets[moduleId] = [];
+          if (!storage) {
+            console.warn("localforage not available, skipping module assets restoration");
+          } else {
+            for (const assetPath of assetFiles) {
+              const file2 = zip.file(assetPath);
+              if (file2 && !file2.dir) {
+                try {
+                  const filename = assetPath.split("/")[1];
+                  const match = filename.match(/^(.+?)-(\d+)\.(.+)$/);
+                  if (match) {
+                    const moduleId = match[1];
+                    const index = parseInt(match[2]);
+                    const ext = match[3];
+                    const assetUint8Array = await file2.async("uint8array");
+                    const storageKey = `asset-${moduleId}-${index}-${Date.now()}`;
+                    await storage.setItem(storageKey, assetUint8Array);
+                    console.log(`Restored asset to storage: ${storageKey}`);
+                    if (!moduleAssets[moduleId]) {
+                      moduleAssets[moduleId] = [];
+                    }
+                    moduleAssets[moduleId][index] = [`asset-${moduleId}-${index}`, storageKey, ext];
+                  }
+                } catch (assetError) {
+                  console.warn(`Error restoring asset ${assetPath}:`, assetError);
                 }
-                moduleAssets[moduleId][index] = [assetId, assetData, ext];
               }
             }
           }
