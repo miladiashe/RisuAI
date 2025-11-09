@@ -1,8 +1,8 @@
-export default {
-    id: 'debug-plugin',
-    name: 'Debug Plugin',
-    description: 'Debug tool for analyzing storage and database',
-    version: '1.0.0',
-    author: 'Dev',
-    entrypoint: 'src/index.ts'
-}
+import type { PluginConfig } from '../types/plugin-config';
+
+const config: PluginConfig = {
+    name: 'debug',
+    displayName: 'Debug Plugin'
+};
+
+export default config;

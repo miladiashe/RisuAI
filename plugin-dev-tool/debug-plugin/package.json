@@ -2,5 +2,8 @@
   "name": "debug-plugin",
   "version": "1.0.0",
   "description": "Debug tool for RisuAI",
-  "main": "src/index.ts"
+  "main": "src/index.ts",
+  "scripts": {
+    "build": "node ../dist/builder.js"
+  }
 }
