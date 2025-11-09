@@ -3249,10 +3249,9 @@ Version: ${importedSettings.exportVersion || "Unknown"}
         setDatabase(importedSettings);
         removeLoadingOverlay();
         console.log("Settings Backup v3: Import successful!");
-        alert("\u2705 Settings imported successfully! Refreshing page...");
-        setTimeout(() => {
-          location.reload();
-        }, 1e3);
+        alert(
+          "\u2705 Settings imported successfully!\n\n\u26A0\uFE0F Please wait for a while for auto save and refresh manually."
+        );
       } catch (error) {
         removeLoadingOverlay();
         console.error("Settings Backup v3: Import failed", error);

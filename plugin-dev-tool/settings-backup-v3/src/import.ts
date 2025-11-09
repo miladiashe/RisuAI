@@ -218,12 +218,10 @@ export async function importSettings() {
 
             removeLoadingOverlay();
             console.log('Settings Backup v3: Import successful!');
-            alert('✅ Settings imported successfully! Refreshing page...');
-
-            // Refresh page to apply changes
-            setTimeout(() => {
-                location.reload();
-            }, 1000);
+            alert(
+                '✅ Settings imported successfully!\n\n' +
+                '⚠️ Please wait for a while for auto save and refresh manually.'
+            );
 
         } catch (error) {
             removeLoadingOverlay();
