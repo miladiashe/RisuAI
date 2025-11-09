@@ -2898,37 +2898,91 @@
   }
   function createUI(options) {
     const container = document.createElement("div");
+    container.id = "settings-backup-v3-ui";
     container.style.cssText = `
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
         display: flex;
         gap: 10px;
-        z-index: 9999;
+        margin-top: 10px;
+        padding: 15px;
+        background: rgba(76, 175, 80, 0.1);
+        border: 2px dashed #4CAF50;
+        border-radius: 8px;
+    `;
+    const pluginLabel = document.createElement("div");
+    pluginLabel.textContent = "\u{1F50C} Plugin: Settings Backup v3";
+    pluginLabel.style.cssText = `
+        flex: 1;
+        display: flex;
+        align-items: center;
+        font-weight: bold;
+        color: #4CAF50;
+        font-size: 13px;
+    `;
+    const buttonContainer = document.createElement("div");
+    buttonContainer.style.cssText = `
+        display: flex;
+        gap: 8px;
     `;
     const buttonStyle = `
-        padding: 12px 20px;
+        padding: 10px 16px;
         background: #4CAF50;
         color: white;
         border: none;
         border-radius: 5px;
         cursor: pointer;
-        font-size: 14px;
+        font-size: 13px;
         font-weight: bold;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        transition: background 0.2s;
     `;
     const exportBtn = document.createElement("button");
-    exportBtn.textContent = "\u{1F4BE} Export Settings";
+    exportBtn.textContent = "\u{1F4BE} Export";
     exportBtn.style.cssText = buttonStyle;
+    exportBtn.onmouseenter = () => exportBtn.style.background = "#45a049";
+    exportBtn.onmouseleave = () => exportBtn.style.background = "#4CAF50";
     exportBtn.onclick = options.onExport;
     const importBtn = document.createElement("button");
-    importBtn.textContent = "\u{1F4E5} Import Settings";
+    importBtn.textContent = "\u{1F4E5} Import";
     importBtn.style.cssText = buttonStyle + "background: #2196F3;";
+    importBtn.onmouseenter = () => importBtn.style.background = "#1976D2";
+    importBtn.onmouseleave = () => importBtn.style.background = "#2196F3";
     importBtn.onclick = options.onImport;
-    container.appendChild(exportBtn);
-    container.appendChild(importBtn);
-    document.body.appendChild(container);
+    buttonContainer.appendChild(exportBtn);
+    buttonContainer.appendChild(importBtn);
+    container.appendChild(pluginLabel);
+    container.appendChild(buttonContainer);
+    injectIntoSettingsPage(container);
     return container;
+  }
+  function injectIntoSettingsPage(container) {
+    const checkInterval = setInterval(() => {
+      const settingsPage = document.querySelector('[data-page="settings"]') || document.querySelector(".settings-page") || Array.from(document.querySelectorAll("*")).find(
+        (el) => el.textContent?.includes("\uACC4\uC815 & \uD30C\uC77C") || el.textContent?.includes("Account")
+      )?.closest("div");
+      if (settingsPage && !document.getElementById("settings-backup-v3-ui")) {
+        const fileSection = Array.from(document.querySelectorAll("*")).find(
+          (el) => el.textContent?.includes("\uACC4\uC815 & \uD30C\uC77C") || el.textContent?.includes("Account & File")
+        );
+        if (fileSection) {
+          const parent = fileSection.parentElement;
+          if (parent) {
+            parent.insertBefore(container, fileSection.nextSibling);
+            console.log("Settings Backup v3: UI injected into Settings page");
+            clearInterval(checkInterval);
+            return;
+          }
+        }
+        settingsPage.appendChild(container);
+        console.log("Settings Backup v3: UI injected into Settings page (fallback)");
+        clearInterval(checkInterval);
+      }
+    }, 500);
+    setTimeout(() => {
+      clearInterval(checkInterval);
+      if (!document.getElementById("settings-backup-v3-ui")) {
+        console.warn("Settings Backup v3: Could not find settings page, appending to body");
+        document.body.appendChild(container);
+      }
+    }, 3e4);
   }
 
   // src/export.ts
@@ -3156,7 +3210,7 @@ Version: ${importedSettings.exportVersion || "Unknown"}
             updateLoadingProgress(
               processedAssets,
               assetFiles.length,
-              `Restoring assets (${processedAssets}/${assetFiles.length})`
+              "Restoring assets"
             );
             const file2 = zip.file(assetPath);
             if (file2 && !file2.dir) {
@@ -3246,7 +3300,7 @@ Version: ${importedSettings.exportVersion || "Unknown"}
         importedSettings.characters = currentCharacters;
         importedSettings.characterOrder = currentCharacterOrder;
         updateLoadingProgress(1, 1, "Saving to database");
-        setDatabase(importedSettings);
+        setDatabaseLite(importedSettings);
         removeLoadingOverlay();
         console.log("Settings Backup v3: Import successful!");
         alert(
