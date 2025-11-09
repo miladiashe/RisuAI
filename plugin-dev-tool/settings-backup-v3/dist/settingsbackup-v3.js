@@ -3147,6 +3147,7 @@
       const zipBlob = await zip.generateAsync({ type: "blob" });
       const filename = `risuai-settings-v3-${(/* @__PURE__ */ new Date()).toISOString().split("T")[0]}.zip`;
       let downloadSuccessful = false;
+      let usedWebShare = false;
       if (navigator.share) {
         try {
           const file = new File([zipBlob], filename, { type: "application/zip" });
@@ -3158,12 +3159,14 @@
               text: "Settings backup file"
             });
             downloadSuccessful = true;
+            usedWebShare = true;
             console.log("Settings Backup v3: Exported via Web Share API");
           }
         } catch (error) {
           if (error instanceof Error && error.name === "AbortError") {
             console.log("User cancelled share");
             downloadSuccessful = true;
+            usedWebShare = true;
           } else {
             console.warn("Web Share API failed, trying fallback:", error);
           }
@@ -3220,7 +3223,7 @@
       }
       removeLoadingOverlay();
       console.log("Settings Backup v3: Export successful!");
-      if (navigator.share && downloadSuccessful) {
+      if (usedWebShare) {
         console.log("Export completed via share dialog");
       } else {
         alert("\u2705 Settings exported successfully!\n\nCheck your Downloads folder for the ZIP file.");
