@@ -2736,30 +2736,23 @@
   var import_jszip = __toESM(require_jszip_min());
 
   // src/storage.ts
-  function getFileSrcFunc() {
-    if (globalThis.getFileSrc) {
-      return globalThis.getFileSrc;
-    }
-    if (window.getFileSrc) {
-      return window.getFileSrc;
-    }
-    if (globalThis.__pluginApis__?.getFileSrc) {
-      return globalThis.__pluginApis__.getFileSrc;
-    }
-    return null;
-  }
-  function getForageStorage() {
-    if (globalThis.forageStorage) {
-      return globalThis.forageStorage;
-    }
-    if (globalThis.localforage) {
-      return globalThis.localforage.createInstance({ name: "risuai" });
-    }
-    throw new Error("No storage available");
-  }
   function createStorage() {
-    const storage = getForageStorage();
-    const getFileSrc = getFileSrcFunc();
+    let storage;
+    if (globalThis.forageStorage) {
+      storage = globalThis.forageStorage;
+    } else if (globalThis.localforage) {
+      storage = globalThis.localforage.createInstance({ name: "risuai" });
+    } else {
+      throw new Error("No storage available (forageStorage/localforage not found)");
+    }
+    let getFileSrc = null;
+    if (globalThis.getFileSrc) {
+      getFileSrc = globalThis.getFileSrc;
+    } else if (window.getFileSrc) {
+      getFileSrc = window.getFileSrc;
+    } else if (globalThis.__pluginApis__?.getFileSrc) {
+      getFileSrc = globalThis.__pluginApis__.getFileSrc;
+    }
     return {
       /**
        * Get item using getFileSrc (URL) or forageStorage fallback
