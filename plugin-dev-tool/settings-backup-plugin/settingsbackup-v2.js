@@ -2735,15 +2735,81 @@
 
   // src/export.ts
   var import_jszip = __toESM(require_jszip_min());
+  function createLoadingOverlay(message) {
+    const overlay = document.createElement("div");
+    overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.7);
+        z-index: 99999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        backdrop-filter: blur(4px);
+    `;
+    const container2 = document.createElement("div");
+    container2.style.cssText = `
+        background: white;
+        padding: 40px;
+        border-radius: 12px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        text-align: center;
+        max-width: 400px;
+    `;
+    const spinner = document.createElement("div");
+    spinner.style.cssText = `
+        width: 60px;
+        height: 60px;
+        border: 6px solid #f3f3f3;
+        border-top: 6px solid #3b82f6;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 20px;
+    `;
+    const style = document.createElement("style");
+    style.textContent = `
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    `;
+    document.head.appendChild(style);
+    const messageEl = document.createElement("div");
+    messageEl.id = "export-loading-message";
+    messageEl.style.cssText = `
+        font-size: 18px;
+        font-weight: 600;
+        color: #1f2937;
+        margin-bottom: 10px;
+    `;
+    messageEl.textContent = message;
+    const progressEl = document.createElement("div");
+    progressEl.id = "export-loading-progress";
+    progressEl.style.cssText = `
+        font-size: 14px;
+        color: #6b7280;
+    `;
+    progressEl.textContent = "Initializing...";
+    container2.appendChild(spinner);
+    container2.appendChild(messageEl);
+    container2.appendChild(progressEl);
+    overlay.appendChild(container2);
+    document.body.appendChild(overlay);
+    return overlay;
+  }
+  function updateLoadingProgress(current, total, message) {
+    const progressEl = document.getElementById("export-loading-progress");
+    if (progressEl) {
+      progressEl.textContent = `${message} (${current}/${total})`;
+    }
+  }
   async function exportSettings() {
     console.log("Settings Backup: Exporting settings...");
-    const confirmed = confirm(
-      "\u{1F4BE} Export Settings\n\n\u26A0\uFE0F Please do not modify settings, modules, or assets during the export process.\n\nThis may take a few seconds depending on the number of modules.\n\nContinue?"
-    );
-    if (!confirmed) {
-      console.log("Settings Backup: Export cancelled by user");
-      return;
-    }
+    const overlay = createLoadingOverlay("\u{1F4BE} Exporting Settings");
     try {
       const db = getDatabase();
       const moduleAssets = {};
@@ -2784,9 +2850,11 @@
           const totalAssets = Object.values(moduleAssets).reduce((sum, assets) => sum + assets.length, 0);
           let processedAssets = 0;
           console.log(`Processing ${totalAssets} module assets...`);
+          updateLoadingProgress(0, totalAssets, "Processing module assets");
           for (const [moduleId, assets] of Object.entries(moduleAssets)) {
             for (let i = 0; i < assets.length; i++) {
               processedAssets++;
+              updateLoadingProgress(processedAssets, totalAssets, "Processing module assets");
               try {
                 const asset = assets[i];
                 if (!asset || !Array.isArray(asset)) {
@@ -2834,7 +2902,9 @@
           console.log(`Completed processing ${processedAssets} assets`);
         }
       }
+      updateLoadingProgress(1, 1, "Creating ZIP file");
       const zipBlob = await zip.generateAsync({ type: "blob" });
+      updateLoadingProgress(1, 1, "Preparing download");
       const url = URL.createObjectURL(zipBlob);
       const a = document.createElement("a");
       a.href = url;
@@ -2843,9 +2913,15 @@
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+      if (overlay && overlay.parentNode) {
+        overlay.parentNode.removeChild(overlay);
+      }
       console.log("Settings Backup: Export successful!");
       alert("\u2705 Settings exported successfully as ZIP file!");
     } catch (error) {
+      if (overlay && overlay.parentNode) {
+        overlay.parentNode.removeChild(overlay);
+      }
       console.error("Settings Backup: Export failed", error);
       alert("\u274C Export failed: " + (error instanceof Error ? error.message : "Unknown error"));
     }
@@ -2853,6 +2929,70 @@
 
   // src/import.ts
   var import_jszip2 = __toESM(require_jszip_min());
+  function createLoadingOverlay2(message) {
+    const overlay = document.createElement("div");
+    overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.7);
+        z-index: 99999;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        backdrop-filter: blur(4px);
+    `;
+    const container2 = document.createElement("div");
+    container2.style.cssText = `
+        background: white;
+        padding: 40px;
+        border-radius: 12px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        text-align: center;
+        max-width: 400px;
+    `;
+    const spinner = document.createElement("div");
+    spinner.style.cssText = `
+        width: 60px;
+        height: 60px;
+        border: 6px solid #f3f3f3;
+        border-top: 6px solid #3b82f6;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 20px;
+    `;
+    const messageEl = document.createElement("div");
+    messageEl.id = "import-loading-message";
+    messageEl.style.cssText = `
+        font-size: 18px;
+        font-weight: 600;
+        color: #1f2937;
+        margin-bottom: 10px;
+    `;
+    messageEl.textContent = message;
+    const progressEl = document.createElement("div");
+    progressEl.id = "import-loading-progress";
+    progressEl.style.cssText = `
+        font-size: 14px;
+        color: #6b7280;
+    `;
+    progressEl.textContent = "Initializing...";
+    container2.appendChild(spinner);
+    container2.appendChild(messageEl);
+    container2.appendChild(progressEl);
+    overlay.appendChild(container2);
+    document.body.appendChild(overlay);
+    return overlay;
+  }
+  function updateLoadingProgress2(message) {
+    const progressEl = document.getElementById("import-loading-progress");
+    if (progressEl) {
+      progressEl.textContent = message;
+    }
+  }
   function importSettings() {
     console.log("Settings Backup: Importing settings...");
     const input = document.createElement("input");
@@ -2863,7 +3003,9 @@
       if (!file) {
         return;
       }
+      let overlay = null;
       try {
+        updateLoadingProgress2("Reading ZIP file...");
         const zip = await import_jszip2.default.loadAsync(file);
         const settingsFile = zip.file("settings.json");
         if (!settingsFile) {
@@ -2888,9 +3030,12 @@ Continue?`
           console.log("Settings Backup: Import cancelled by user");
           return;
         }
+        overlay = createLoadingOverlay2("\u{1F4E5} Importing Settings");
+        updateLoadingProgress2("Reading current database...");
         const db = getDatabase();
         const currentCharacters = db.characters;
         const currentCharacterOrder = db.characterOrder;
+        updateLoadingProgress2("Processing module assets...");
         const moduleAssets = {};
         const storage = typeof localforage !== "undefined" ? localforage.createInstance({ name: "risuai" }) : null;
         const assetsFolder = zip.folder("module-assets");
@@ -2899,7 +3044,11 @@ Continue?`
           if (!storage) {
             console.warn("localforage not available, skipping module assets restoration");
           } else {
+            let processedAssets = 0;
+            const totalAssets = assetFiles.length;
             for (const assetPath of assetFiles) {
+              processedAssets++;
+              updateLoadingProgress2(`Restoring assets (${processedAssets}/${totalAssets})`);
               const file2 = zip.file(assetPath);
               if (file2 && !file2.dir) {
                 try {
@@ -2942,6 +3091,7 @@ Continue?`
           characters: currentCharacters,
           characterOrder: currentCharacterOrder
         };
+        updateLoadingProgress2("Saving settings...");
         if (typeof setDatabaseLite !== "undefined") {
           setDatabaseLite(mergedDb);
         } else {
@@ -2951,9 +3101,15 @@ Continue?`
             throw new Error("Database setter function not available");
           }
         }
+        if (overlay && overlay.parentNode) {
+          overlay.parentNode.removeChild(overlay);
+        }
         console.log("Settings Backup: Import successful!");
         alert("\u2705 Settings imported successfully!\n\n\u26A0\uFE0F Please refresh the page to apply changes.");
       } catch (error) {
+        if (overlay && overlay.parentNode) {
+          overlay.parentNode.removeChild(overlay);
+        }
         console.error("Settings Backup: Import failed", error);
         alert("\u274C Import failed: " + (error instanceof Error ? error.message : "Unknown error"));
       }
