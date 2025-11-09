@@ -202,6 +202,7 @@ export async function exportSettings() {
         // Download with fallback strategies
         const filename = `risuai-settings-v3-${new Date().toISOString().split('T')[0]}.zip`;
         let downloadSuccessful = false;
+        let usedWebShare = false;
 
         // Strategy 1: Web Share API (mobile HTTPS, Tauri)
         if (navigator.share) {
@@ -220,6 +221,7 @@ export async function exportSettings() {
                         text: 'Settings backup file'
                     });
                     downloadSuccessful = true;
+                    usedWebShare = true;
                     console.log('Settings Backup v3: Exported via Web Share API');
                 }
             } catch (error) {
@@ -227,6 +229,7 @@ export async function exportSettings() {
                 if (error instanceof Error && error.name === 'AbortError') {
                     console.log('User cancelled share');
                     downloadSuccessful = true; // Don't fallback if user cancelled
+                    usedWebShare = true;
                 } else {
                     console.warn('Web Share API failed, trying fallback:', error);
                 }
@@ -299,8 +302,8 @@ export async function exportSettings() {
         console.log('Settings Backup v3: Export successful!');
 
         // Show appropriate message based on method used
-        if (navigator.share && downloadSuccessful) {
-            // Likely used Web Share API - don't show alert as share dialog already appeared
+        if (usedWebShare) {
+            // Used Web Share API - don't show alert as share dialog already appeared
             console.log('Export completed via share dialog');
         } else {
             alert('✅ Settings exported successfully!\n\nCheck your Downloads folder for the ZIP file.');
