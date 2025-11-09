@@ -2734,6 +2734,204 @@
 
   // src/export.ts
   var import_jszip = __toESM(require_jszip_min());
+
+  // src/storage.ts
+  async function getFromSWCache(storageKey) {
+    try {
+      const textEncoder = new TextEncoder();
+      const bytes = textEncoder.encode(storageKey);
+      const encoded = Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("");
+      const checkResponse = await fetch("/sw/check/" + encoded);
+      const checkData = await checkResponse.json();
+      if (checkData.able) {
+        console.log(`\u2713 Found ${storageKey} in Service Worker cache`);
+        const imgResponse = await fetch("/sw/img/" + encoded);
+        const arrayBuffer = await imgResponse.arrayBuffer();
+        return new Uint8Array(arrayBuffer);
+      }
+    } catch (error) {
+      console.warn(`SW cache access failed for ${storageKey}:`, error);
+    }
+    return null;
+  }
+  function createStorage() {
+    if (globalThis.localforage) {
+      console.log("Using localforage for storage");
+      const storage = globalThis.localforage.createInstance({ name: "risuai" });
+      return {
+        getItem: async (key) => {
+          try {
+            const data = await storage.getItem(key);
+            if (data)
+              return data;
+            console.log(`Storage miss for ${key}, trying SW cache...`);
+            return await getFromSWCache(key);
+          } catch (error) {
+            console.warn(`Storage getItem failed for ${key}:`, error);
+            return await getFromSWCache(key);
+          }
+        },
+        setItem: async (key, value) => {
+          await storage.setItem(key, value);
+        },
+        keys: async () => {
+          return await storage.keys();
+        }
+      };
+    }
+    console.log("Using IndexedDB for storage");
+    return {
+      getItem: async (key) => {
+        return new Promise(async (resolve, reject) => {
+          const request = indexedDB.open("risuai");
+          request.onsuccess = async (event) => {
+            const db = event.target.result;
+            if (!db.objectStoreNames.contains("keyvaluepairs")) {
+              db.close();
+              resolve(await getFromSWCache(key));
+              return;
+            }
+            const transaction = db.transaction(["keyvaluepairs"], "readonly");
+            const store = transaction.objectStore("keyvaluepairs");
+            const getRequest = store.get(key);
+            getRequest.onsuccess = async () => {
+              db.close();
+              if (getRequest.result) {
+                resolve(getRequest.result);
+              } else {
+                console.log(`Storage miss for ${key}, trying SW cache...`);
+                resolve(await getFromSWCache(key));
+              }
+            };
+            getRequest.onerror = async () => {
+              db.close();
+              resolve(await getFromSWCache(key));
+            };
+          };
+          request.onerror = () => reject(request.error);
+        });
+      },
+      setItem: async (key, value) => {
+        return new Promise((resolve, reject) => {
+          const request = indexedDB.open("risuai");
+          request.onsuccess = (event) => {
+            const db = event.target.result;
+            const transaction = db.transaction(["keyvaluepairs"], "readwrite");
+            const store = transaction.objectStore("keyvaluepairs");
+            const putRequest = store.put(value, key);
+            putRequest.onsuccess = () => {
+              db.close();
+              resolve();
+            };
+            putRequest.onerror = () => {
+              db.close();
+              reject(putRequest.error);
+            };
+          };
+          request.onerror = () => reject(request.error);
+        });
+      },
+      keys: async () => {
+        return new Promise((resolve, reject) => {
+          const request = indexedDB.open("risuai");
+          request.onsuccess = (event) => {
+            const db = event.target.result;
+            const transaction = db.transaction(["keyvaluepairs"], "readonly");
+            const store = transaction.objectStore("keyvaluepairs");
+            const getAllKeysRequest = store.getAllKeys();
+            getAllKeysRequest.onsuccess = () => {
+              db.close();
+              resolve(getAllKeysRequest.result);
+            };
+            getAllKeysRequest.onerror = () => {
+              db.close();
+              reject(getAllKeysRequest.error);
+            };
+          };
+          request.onerror = () => reject(request.error);
+        });
+      }
+    };
+  }
+
+  // src/ui.ts
+  function createLoadingOverlay(message) {
+    const overlay = document.createElement("div");
+    overlay.id = "settings-backup-loading-overlay";
+    overlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.8);
+        display: flex;
+        flex-direction: column;
+        justify-center;
+        align-items: center;
+        z-index: 10000;
+        color: white;
+        font-size: 18px;
+    `;
+    const messageEl = document.createElement("div");
+    messageEl.textContent = message;
+    messageEl.style.cssText = "margin-bottom: 20px; font-size: 24px;";
+    const progressEl = document.createElement("div");
+    progressEl.id = "export-loading-progress";
+    progressEl.style.cssText = "font-size: 16px; color: #aaa;";
+    overlay.appendChild(messageEl);
+    overlay.appendChild(progressEl);
+    document.body.appendChild(overlay);
+    return overlay;
+  }
+  function updateLoadingProgress(current, total, message) {
+    const progressEl = document.getElementById("export-loading-progress");
+    if (progressEl) {
+      progressEl.textContent = `${message} (${current}/${total})`;
+    }
+  }
+  function removeLoadingOverlay() {
+    const overlay = document.getElementById("settings-backup-loading-overlay");
+    if (overlay) {
+      document.body.removeChild(overlay);
+    }
+  }
+  function createUI(options) {
+    const container = document.createElement("div");
+    container.style.cssText = `
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        display: flex;
+        gap: 10px;
+        z-index: 9999;
+    `;
+    const buttonStyle = `
+        padding: 12px 20px;
+        background: #4CAF50;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: bold;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+    `;
+    const exportBtn = document.createElement("button");
+    exportBtn.textContent = "\u{1F4BE} Export Settings";
+    exportBtn.style.cssText = buttonStyle;
+    exportBtn.onclick = options.onExport;
+    const importBtn = document.createElement("button");
+    importBtn.textContent = "\u{1F4E5} Import Settings";
+    importBtn.style.cssText = buttonStyle + "background: #2196F3;";
+    importBtn.onclick = options.onImport;
+    container.appendChild(exportBtn);
+    container.appendChild(importBtn);
+    document.body.appendChild(container);
+    return container;
+  }
+
+  // src/export.ts
   async function exportSettings() {
     console.log("Settings Backup v3: Starting export...");
     const overlay = createLoadingOverlay("\u{1F4BE} Exporting Settings");
@@ -2903,42 +3101,6 @@
   // src/import.ts
   function importSettings() {
     alert("Import functionality coming soon! For now, use the v2 plugin for imports.");
-  }
-
-  // src/ui.ts
-  function createUI(options) {
-    const container = document.createElement("div");
-    container.style.cssText = `
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        display: flex;
-        gap: 10px;
-        z-index: 9999;
-    `;
-    const buttonStyle = `
-        padding: 12px 20px;
-        background: #4CAF50;
-        color: white;
-        border: none;
-        border-radius: 5px;
-        cursor: pointer;
-        font-size: 14px;
-        font-weight: bold;
-        box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-    `;
-    const exportBtn = document.createElement("button");
-    exportBtn.textContent = "\u{1F4BE} Export Settings";
-    exportBtn.style.cssText = buttonStyle;
-    exportBtn.onclick = options.onExport;
-    const importBtn = document.createElement("button");
-    importBtn.textContent = "\u{1F4E5} Import Settings";
-    importBtn.style.cssText = buttonStyle + "background: #2196F3;";
-    importBtn.onclick = options.onImport;
-    container.appendChild(exportBtn);
-    container.appendChild(importBtn);
-    document.body.appendChild(container);
-    return container;
   }
 
   // src/index.ts
