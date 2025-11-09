@@ -2972,36 +2972,28 @@
     return container;
   }
   function injectIntoSettingsPage(container) {
-    const checkInterval = setInterval(() => {
+    setInterval(() => {
+      const existing = document.getElementById("settings-backup-v3-ui");
+      if (existing && existing.parentElement) {
+        return;
+      }
       const sectionName = `${getLocalizedText("account")} & ${getLocalizedText("files")}`;
-      const settingsPage = document.querySelector('[data-page="settings"]') || document.querySelector(".settings-page") || Array.from(document.querySelectorAll("*")).find(
-        (el) => el.textContent?.includes(sectionName) || el.textContent?.includes("Account") || el.textContent?.includes("\uACC4\uC815")
-      )?.closest("div");
-      if (settingsPage && !document.getElementById("settings-backup-v3-ui")) {
-        const fileSection = Array.from(document.querySelectorAll("*")).find(
-          (el) => el.textContent?.includes(sectionName) || el.textContent?.includes("Account & File") || el.textContent?.includes("\uACC4\uC815 & \uD30C\uC77C")
-        );
-        if (fileSection) {
-          const parent = fileSection.parentElement;
-          if (parent) {
-            parent.insertBefore(container, fileSection.nextSibling);
-            console.log("Settings Backup v3: UI injected into Settings page");
-            clearInterval(checkInterval);
-            return;
+      const settingsContainer = document.querySelector(".rs-setting-cont-4");
+      if (settingsContainer) {
+        const heading = Array.from(settingsContainer.querySelectorAll("h2")).find((h2) => {
+          const text = h2.textContent?.trim() || "";
+          return text === sectionName || text.includes("Account") || text.includes("\uACC4\uC815");
+        });
+        if (heading) {
+          if (existing && !existing.parentElement) {
+            existing.remove();
           }
+          heading.insertAdjacentElement("afterend", container);
+          console.log("Settings Backup v3: UI injected after heading");
+          return;
         }
-        settingsPage.appendChild(container);
-        console.log("Settings Backup v3: UI injected into Settings page (fallback)");
-        clearInterval(checkInterval);
       }
     }, 500);
-    setTimeout(() => {
-      clearInterval(checkInterval);
-      if (!document.getElementById("settings-backup-v3-ui")) {
-        console.warn("Settings Backup v3: Could not find settings page, appending to body");
-        document.body.appendChild(container);
-      }
-    }, 3e4);
   }
 
   // src/export.ts
