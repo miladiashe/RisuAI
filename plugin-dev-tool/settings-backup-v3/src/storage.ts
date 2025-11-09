@@ -12,6 +12,7 @@ export interface StorageHelper {
 /**
  * Create storage helper using RisuAI's getFileSrc + forageStorage/IndexedDB
  * getFileSrc handles IndexedDB, SW cache, Tauri, and Capacitor
+ * All functions are injected into plugin eval scope as globals
  */
 export function createStorage(): StorageHelper {
     // Try to get forageStorage (optional)
@@ -22,16 +23,6 @@ export function createStorage(): StorageHelper {
         storage = (globalThis as any).localforage.createInstance({ name: "risuai" });
     }
 
-    // Get getFileSrc (optional)
-    let getFileSrc: ((loc: string) => Promise<string>) | null = null;
-    if ((globalThis as any).getFileSrc) {
-        getFileSrc = (globalThis as any).getFileSrc;
-    } else if ((window as any).getFileSrc) {
-        getFileSrc = (window as any).getFileSrc;
-    } else if ((globalThis as any).__pluginApis__?.getFileSrc) {
-        getFileSrc = (globalThis as any).__pluginApis__.getFileSrc;
-    }
-
     return {
         /**
          * Get item using getFileSrc (URL) or forageStorage or manual IndexedDB
@@ -39,29 +30,26 @@ export function createStorage(): StorageHelper {
          */
         getItem: async (key: string) => {
             // Strategy 1: Try getFileSrc first (handles SW cache + all platforms)
-            if (getFileSrc) {
+            // getFileSrc is a global function injected by RisuAI plugin system
+            try {
                 console.log(`[Storage] Trying getFileSrc for ${key}...`);
-                try {
-                    const url = await getFileSrc(key);
-                    console.log(`[Storage] getFileSrc returned:`, url ? `URL (${url.substring(0, 50)}...)` : 'empty/null');
+                const url = await getFileSrc(key);
+                console.log(`[Storage] getFileSrc returned:`, url ? `URL (${url.substring(0, 50)}...)` : 'empty/null');
 
-                    if (url && url.length > 0) {
-                        // Fetch the URL to get Uint8Array
-                        const response = await fetch(url);
-                        console.log(`[Storage] fetch response:`, response.ok ? 'OK' : `Failed (${response.status})`);
+                if (url && url.length > 0) {
+                    // Fetch the URL to get Uint8Array
+                    const response = await fetch(url);
+                    console.log(`[Storage] fetch response:`, response.ok ? 'OK' : `Failed (${response.status})`);
 
-                        if (response.ok) {
-                            const arrayBuffer = await response.arrayBuffer();
-                            const data = new Uint8Array(arrayBuffer);
-                            console.log(`✓ Found ${key} via getFileSrc (${data.length} bytes)`);
-                            return data;
-                        }
+                    if (response.ok) {
+                        const arrayBuffer = await response.arrayBuffer();
+                        const data = new Uint8Array(arrayBuffer);
+                        console.log(`✓ Found ${key} via getFileSrc (${data.length} bytes)`);
+                        return data;
                     }
-                } catch (error) {
-                    console.warn(`[Storage] getFileSrc failed for ${key}:`, error);
                 }
-            } else {
-                console.log(`[Storage] getFileSrc not available for ${key}`);
+            } catch (error) {
+                console.warn(`[Storage] getFileSrc failed for ${key}:`, error);
             }
 
             // Strategy 2: Try forageStorage

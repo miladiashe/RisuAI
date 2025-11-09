@@ -2743,40 +2743,28 @@
     } else if (globalThis.localforage) {
       storage = globalThis.localforage.createInstance({ name: "risuai" });
     }
-    let getFileSrc = null;
-    if (globalThis.getFileSrc) {
-      getFileSrc = globalThis.getFileSrc;
-    } else if (window.getFileSrc) {
-      getFileSrc = window.getFileSrc;
-    } else if (globalThis.__pluginApis__?.getFileSrc) {
-      getFileSrc = globalThis.__pluginApis__.getFileSrc;
-    }
     return {
       /**
        * Get item using getFileSrc (URL) or forageStorage or manual IndexedDB
        * getFileSrc automatically handles SW cache, IndexedDB, Tauri, Capacitor
        */
       getItem: async (key) => {
-        if (getFileSrc) {
+        try {
           console.log(`[Storage] Trying getFileSrc for ${key}...`);
-          try {
-            const url = await getFileSrc(key);
-            console.log(`[Storage] getFileSrc returned:`, url ? `URL (${url.substring(0, 50)}...)` : "empty/null");
-            if (url && url.length > 0) {
-              const response = await fetch(url);
-              console.log(`[Storage] fetch response:`, response.ok ? "OK" : `Failed (${response.status})`);
-              if (response.ok) {
-                const arrayBuffer = await response.arrayBuffer();
-                const data = new Uint8Array(arrayBuffer);
-                console.log(`\u2713 Found ${key} via getFileSrc (${data.length} bytes)`);
-                return data;
-              }
+          const url = await getFileSrc(key);
+          console.log(`[Storage] getFileSrc returned:`, url ? `URL (${url.substring(0, 50)}...)` : "empty/null");
+          if (url && url.length > 0) {
+            const response = await fetch(url);
+            console.log(`[Storage] fetch response:`, response.ok ? "OK" : `Failed (${response.status})`);
+            if (response.ok) {
+              const arrayBuffer = await response.arrayBuffer();
+              const data = new Uint8Array(arrayBuffer);
+              console.log(`\u2713 Found ${key} via getFileSrc (${data.length} bytes)`);
+              return data;
             }
-          } catch (error) {
-            console.warn(`[Storage] getFileSrc failed for ${key}:`, error);
           }
-        } else {
-          console.log(`[Storage] getFileSrc not available for ${key}`);
+        } catch (error) {
+          console.warn(`[Storage] getFileSrc failed for ${key}:`, error);
         }
         if (storage) {
           try {
