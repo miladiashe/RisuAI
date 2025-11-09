@@ -40,11 +40,16 @@ export function createStorage(): StorageHelper {
         getItem: async (key: string) => {
             // Strategy 1: Try getFileSrc first (handles SW cache + all platforms)
             if (getFileSrc) {
+                console.log(`[Storage] Trying getFileSrc for ${key}...`);
                 try {
                     const url = await getFileSrc(key);
+                    console.log(`[Storage] getFileSrc returned:`, url ? `URL (${url.substring(0, 50)}...)` : 'empty/null');
+
                     if (url && url.length > 0) {
                         // Fetch the URL to get Uint8Array
                         const response = await fetch(url);
+                        console.log(`[Storage] fetch response:`, response.ok ? 'OK' : `Failed (${response.status})`);
+
                         if (response.ok) {
                             const arrayBuffer = await response.arrayBuffer();
                             const data = new Uint8Array(arrayBuffer);
@@ -53,8 +58,10 @@ export function createStorage(): StorageHelper {
                         }
                     }
                 } catch (error) {
-                    console.warn(`getFileSrc failed for ${key}:`, error);
+                    console.warn(`[Storage] getFileSrc failed for ${key}:`, error);
                 }
+            } else {
+                console.log(`[Storage] getFileSrc not available for ${key}`);
             }
 
             // Strategy 2: Try forageStorage

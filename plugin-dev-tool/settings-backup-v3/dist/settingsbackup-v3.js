@@ -2758,10 +2758,13 @@
        */
       getItem: async (key) => {
         if (getFileSrc) {
+          console.log(`[Storage] Trying getFileSrc for ${key}...`);
           try {
             const url = await getFileSrc(key);
+            console.log(`[Storage] getFileSrc returned:`, url ? `URL (${url.substring(0, 50)}...)` : "empty/null");
             if (url && url.length > 0) {
               const response = await fetch(url);
+              console.log(`[Storage] fetch response:`, response.ok ? "OK" : `Failed (${response.status})`);
               if (response.ok) {
                 const arrayBuffer = await response.arrayBuffer();
                 const data = new Uint8Array(arrayBuffer);
@@ -2770,8 +2773,10 @@
               }
             }
           } catch (error) {
-            console.warn(`getFileSrc failed for ${key}:`, error);
+            console.warn(`[Storage] getFileSrc failed for ${key}:`, error);
           }
+        } else {
+          console.log(`[Storage] getFileSrc not available for ${key}`);
         }
         if (storage) {
           try {
