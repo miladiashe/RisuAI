@@ -3509,6 +3509,17 @@ Version: ${importedSettings.exportVersion || "Unknown"}
 
   // src/index.ts
   console.log("Settings Backup v3: Initializing...");
+  console.log("[Test] Checking getFileSrc availability...");
+  console.log("[Test] globalThis.getFileSrc:", typeof globalThis.getFileSrc);
+  console.log("[Test] window.getFileSrc:", typeof window.getFileSrc);
+  console.log("[Test] globalThis.__pluginApis__:", typeof globalThis.__pluginApis__);
+  if (globalThis.getFileSrc) {
+    console.log("\u2705 [Test] getFileSrc found in globalThis!");
+  } else if (window.getFileSrc) {
+    console.log("\u2705 [Test] getFileSrc found in window!");
+  } else {
+    console.log("\u274C [Test] getFileSrc NOT FOUND");
+  }
   var uiContainer = createUI({
     onExport: exportSettings,
     onImport: importSettings
