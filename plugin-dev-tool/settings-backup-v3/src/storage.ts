@@ -1,6 +1,6 @@
 /**
- * Storage helper using RisuAI's native file access APIs
- * Automatically handles IndexedDB, Service Worker cache, Tauri, and Capacitor
+ * Storage helper using RisuAI's forageStorage
+ * Automatically handles IndexedDB, Tauri, and Capacitor
  */
 
 export interface StorageHelper {
@@ -10,45 +10,74 @@ export interface StorageHelper {
 }
 
 /**
- * Get RisuAI's readImage function
+ * Get RisuAI's getFileSrc function
  */
-function getReadImage(): (path: string) => Promise<Uint8Array> {
-    if ((globalThis as any).readImage) {
-        return (globalThis as any).readImage;
+function getFileSrcFunc(): ((loc: string) => Promise<string>) | null {
+    // Try multiple access patterns
+    if ((globalThis as any).getFileSrc) {
+        return (globalThis as any).getFileSrc;
     }
-    throw new Error('readImage not available');
+    if ((window as any).getFileSrc) {
+        return (window as any).getFileSrc;
+    }
+    if ((globalThis as any).__pluginApis__?.getFileSrc) {
+        return (globalThis as any).__pluginApis__.getFileSrc;
+    }
+    return null;
 }
 
 /**
- * Create storage helper using RisuAI's native APIs
- * Uses readImage() for reading (handles all platforms automatically)
- * Uses forageStorage for writing
+ * Get RisuAI's forageStorage
+ */
+function getForageStorage() {
+    if ((globalThis as any).forageStorage) {
+        return (globalThis as any).forageStorage;
+    }
+    if ((globalThis as any).localforage) {
+        return (globalThis as any).localforage.createInstance({ name: "risuai" });
+    }
+    throw new Error('No storage available');
+}
+
+/**
+ * Create storage helper using RisuAI's getFileSrc + forageStorage
+ * getFileSrc handles IndexedDB, SW cache, Tauri, and Capacitor
  */
 export function createStorage(): StorageHelper {
-    const readImage = getReadImage();
-
-    // Get forageStorage for writing and keys
-    const getForageStorage = () => {
-        if ((globalThis as any).forageStorage) {
-            return (globalThis as any).forageStorage;
-        }
-        if ((globalThis as any).localforage) {
-            return (globalThis as any).localforage.createInstance({ name: "risuai" });
-        }
-        throw new Error('No storage available');
-    };
+    const storage = getForageStorage();
+    const getFileSrc = getFileSrcFunc();
 
     return {
         /**
-         * Get item using RisuAI's readImage API
-         * Automatically handles IndexedDB, SW cache, Tauri, Capacitor
+         * Get item using getFileSrc (URL) or forageStorage fallback
+         * getFileSrc automatically handles SW cache, IndexedDB, Tauri, Capacitor
          */
         getItem: async (key: string) => {
+            // Try getFileSrc first (handles SW cache + all platforms)
+            if (getFileSrc) {
+                try {
+                    const url = await getFileSrc(key);
+                    if (url && url.length > 0) {
+                        // Fetch the URL to get Uint8Array
+                        const response = await fetch(url);
+                        if (response.ok) {
+                            const arrayBuffer = await response.arrayBuffer();
+                            const data = new Uint8Array(arrayBuffer);
+                            console.log(`✓ Found ${key} via getFileSrc (${data.length} bytes)`);
+                            return data;
+                        }
+                    }
+                } catch (error) {
+                    console.warn(`getFileSrc failed for ${key}, trying forageStorage:`, error);
+                }
+            }
+
+            // Fallback to forageStorage
             try {
-                const data = await readImage(key);
-                if (data && data.length > 0) {
-                    console.log(`✓ Found ${key} (${data.length} bytes)`);
-                    return data;
+                const data = await storage.getItem(key);
+                if (data && (data as Uint8Array).length > 0) {
+                    console.log(`✓ Found ${key} via forageStorage (${(data as Uint8Array).length} bytes)`);
+                    return data as Uint8Array;
                 }
                 console.warn(`Asset not found: ${key}`);
                 return null;
@@ -62,7 +91,6 @@ export function createStorage(): StorageHelper {
          * Set item using forageStorage
          */
         setItem: async (key: string, value: Uint8Array) => {
-            const storage = getForageStorage();
             await storage.setItem(key, value);
         },
 
@@ -70,7 +98,6 @@ export function createStorage(): StorageHelper {
          * Get all keys from forageStorage
          */
         keys: async () => {
-            const storage = getForageStorage();
             if (storage.keys) {
                 return await storage.keys();
             }
