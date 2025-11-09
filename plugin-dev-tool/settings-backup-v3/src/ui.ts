@@ -93,19 +93,33 @@ export function createUI(options: UIOptions) {
     `;
 
     const pluginLabel = document.createElement('div');
-    pluginLabel.textContent = '🔄 ResuAI';
     pluginLabel.style.cssText = `
         flex: 1;
         display: flex;
         align-items: center;
+        gap: 6px;
+        font-size: 16px;
+    `;
+
+    // Emoji span (normal color)
+    const emoji = document.createElement('span');
+    emoji.textContent = '🔄';
+    emoji.style.cssText = 'font-size: 18px;';
+
+    // Text span (gradient)
+    const text = document.createElement('span');
+    text.textContent = 'ResuAI';
+    text.style.cssText = `
         font-weight: 700;
         background: linear-gradient(135deg, #8B5CF6 0%, #3B82F6 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         background-clip: text;
-        font-size: 16px;
         letter-spacing: 0.5px;
     `;
+
+    pluginLabel.appendChild(emoji);
+    pluginLabel.appendChild(text);
 
     const buttonContainer = document.createElement('div');
     buttonContainer.style.cssText = `

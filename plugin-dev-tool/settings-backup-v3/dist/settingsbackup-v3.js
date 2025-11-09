@@ -2966,19 +2966,28 @@
         transition: all 0.3s ease;
     `;
     const pluginLabel = document.createElement("div");
-    pluginLabel.textContent = "\u{1F504} ResuAI";
     pluginLabel.style.cssText = `
         flex: 1;
         display: flex;
         align-items: center;
+        gap: 6px;
+        font-size: 16px;
+    `;
+    const emoji = document.createElement("span");
+    emoji.textContent = "\u{1F504}";
+    emoji.style.cssText = "font-size: 18px;";
+    const text = document.createElement("span");
+    text.textContent = "ResuAI";
+    text.style.cssText = `
         font-weight: 700;
         background: linear-gradient(135deg, #8B5CF6 0%, #3B82F6 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         background-clip: text;
-        font-size: 16px;
         letter-spacing: 0.5px;
     `;
+    pluginLabel.appendChild(emoji);
+    pluginLabel.appendChild(text);
     const buttonContainer = document.createElement("div");
     buttonContainer.style.cssText = `
         display: flex;
