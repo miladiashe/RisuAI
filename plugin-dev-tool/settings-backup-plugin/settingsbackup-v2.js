@@ -2844,9 +2844,12 @@
       const assetsFolder = zip.folder("module-assets");
       if (assetsFolder) {
         let storage = null;
-        if (typeof localforage !== "undefined") {
-          console.log("Using localforage");
-          storage = localforage.createInstance({ name: "risuai" });
+        if (typeof globalThis.localforage !== "undefined") {
+          console.log("Using localforage (globalThis)");
+          storage = globalThis.localforage.createInstance({ name: "risuai" });
+        } else if (typeof window !== "undefined" && typeof window.localforage !== "undefined") {
+          console.log("Using localforage (window)");
+          storage = window.localforage.createInstance({ name: "risuai" });
         } else if (typeof indexedDB !== "undefined") {
           console.log("Using IndexedDB directly");
           storage = {
@@ -3066,9 +3069,12 @@ Continue?`
         updateLoadingProgress2("Processing module assets...");
         const moduleAssets = {};
         let storage = null;
-        if (typeof localforage !== "undefined") {
-          console.log("Import: Using localforage");
-          storage = localforage.createInstance({ name: "risuai" });
+        if (typeof globalThis.localforage !== "undefined") {
+          console.log("Import: Using localforage (globalThis)");
+          storage = globalThis.localforage.createInstance({ name: "risuai" });
+        } else if (typeof window !== "undefined" && typeof window.localforage !== "undefined") {
+          console.log("Import: Using localforage (window)");
+          storage = window.localforage.createInstance({ name: "risuai" });
         } else if (typeof indexedDB !== "undefined") {
           console.log("Import: Using IndexedDB directly");
           storage = {
