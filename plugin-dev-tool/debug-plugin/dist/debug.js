@@ -182,20 +182,38 @@ Module: ${module.id} (${module.assets.length} assets)`);
     log("=== Test Asset Lookup ===\n");
     try {
       const db = getDatabase();
-      const moduleWithAssets = db.modules?.find((m) => m.assets && m.assets.length > 0);
-      if (!moduleWithAssets) {
+      const modulesToTest = [];
+      const webpModule = db.modules?.find(
+        (m) => m.assets && m.assets.some((a) => a[2] === "webp")
+      );
+      if (webpModule)
+        modulesToTest.push({ name: "webp module", module: webpModule });
+      const mirModule = db.modules?.find(
+        (m) => m.assets && m.assets.some((a) => a[0]?.includes("Mir"))
+      );
+      if (mirModule)
+        modulesToTest.push({ name: "Mir module", module: mirModule });
+      const dominicModule = db.modules?.find(
+        (m) => m.assets && m.assets.some((a) => a[0]?.includes("Dominic"))
+      );
+      if (dominicModule)
+        modulesToTest.push({ name: "Dominic module", module: dominicModule });
+      if (modulesToTest.length === 0) {
+        log("No interesting modules found, testing first module with assets...\n");
+        const firstModule = db.modules?.find((m) => m.assets && m.assets.length > 0);
+        if (firstModule)
+          modulesToTest.push({ name: "first module", module: firstModule });
+      }
+      if (modulesToTest.length === 0) {
         log("No modules with assets found");
         return;
       }
-      log(`Testing module: ${moduleWithAssets.id}`);
-      log(`Asset count: ${moduleWithAssets.assets.length}
-`);
       let storage = null;
       if (globalThis.localforage) {
         storage = globalThis.localforage.createInstance({ name: "risuai" });
-        log("Using localforage\n");
+        log("Using localforage\n\n");
       } else {
-        log("localforage not available, using IndexedDB\n");
+        log("localforage not available, using IndexedDB\n\n");
         storage = {
           getItem: async (key) => {
             return new Promise((resolve, reject) => {
@@ -219,22 +237,33 @@ Module: ${module.id} (${module.assets.length} assets)`);
           }
         };
       }
-      for (let i = 0; i < Math.min(5, moduleWithAssets.assets.length); i++) {
-        const [assetId, storageKey, ext] = moduleWithAssets.assets[i];
-        try {
-          const data = await storage.getItem(storageKey);
-          const exists = !!data;
-          const size = data ? data.length || data.byteLength || 0 : 0;
-          log(`[${i}] ${assetId}`);
-          log(`    Key: ${storageKey}`);
-          log(`    Ext: ${ext || "undefined"}`);
-          log(`    Exists: ${exists}`);
-          log(`    Size: ${(size / 1024).toFixed(1)} KB
+      for (const { name, module: moduleWithAssets } of modulesToTest) {
+        log(`=== ${name.toUpperCase()} ===`);
+        log(`Module ID: ${moduleWithAssets.id}`);
+        log(`Asset count: ${moduleWithAssets.assets.length}
 `);
-        } catch (error) {
-          log(`[${i}] ${assetId} - Error: ${error}
+        for (let i = 0; i < Math.min(5, moduleWithAssets.assets.length); i++) {
+          const [assetId, storageKey, ext] = moduleWithAssets.assets[i];
+          try {
+            const data = await storage.getItem(storageKey);
+            const exists = !!data;
+            const size = data ? data.length || data.byteLength || 0 : 0;
+            log(`[${i}] ${assetId}`);
+            log(`    Key: ${storageKey}`);
+            log(`    Ext: ${ext || "undefined"}`);
+            log(`    Exists: ${exists}`);
+            if (exists) {
+              log(`    Size: ${(size / 1024).toFixed(1)} KB`);
+            } else {
+              log(`    \u274C NOT FOUND IN STORAGE!`);
+            }
+            log("");
+          } catch (error) {
+            log(`[${i}] ${assetId} - Error: ${error}
 `);
+          }
         }
+        log("\n");
       }
     } catch (error) {
       log(`Error: ${error}`);
