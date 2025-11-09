@@ -204,10 +204,16 @@ export async function exportSettings() {
         let downloadSuccessful = false;
 
         // Strategy 1: Web Share API (mobile HTTPS, Tauri)
-        if (navigator.share && navigator.canShare) {
+        if (navigator.share) {
             try {
                 const file = new File([zipBlob], filename, { type: 'application/zip' });
-                if (navigator.canShare({ files: [file] })) {
+
+                // Try canShare if available, otherwise just try share
+                const canShareFiles = navigator.canShare
+                    ? navigator.canShare({ files: [file] })
+                    : true; // Assume it can share if canShare not available
+
+                if (canShareFiles) {
                     await navigator.share({
                         files: [file],
                         title: 'RisuAI Settings Backup',
@@ -217,7 +223,13 @@ export async function exportSettings() {
                     console.log('Settings Backup v3: Exported via Web Share API');
                 }
             } catch (error) {
-                console.warn('Web Share API failed, trying fallback:', error);
+                // User cancelled or share failed
+                if (error instanceof Error && error.name === 'AbortError') {
+                    console.log('User cancelled share');
+                    downloadSuccessful = true; // Don't fallback if user cancelled
+                } else {
+                    console.warn('Web Share API failed, trying fallback:', error);
+                }
             }
         }
 
@@ -229,14 +241,30 @@ export async function exportSettings() {
                 a.href = url;
                 a.download = filename;
                 a.style.display = 'none';
+                a.target = '_blank';
+                a.rel = 'noopener noreferrer';
                 document.body.appendChild(a);
-                a.click();
+
+                // Try multiple trigger methods for compatibility
+                if (a.click) {
+                    a.click();
+                } else {
+                    // Fallback for older browsers
+                    const clickEvent = new MouseEvent('click', {
+                        view: window,
+                        bubbles: true,
+                        cancelable: true
+                    });
+                    a.dispatchEvent(clickEvent);
+                }
 
                 // Clean up after delay (mobile browsers need time)
                 setTimeout(() => {
-                    document.body.removeChild(a);
+                    if (a.parentElement) {
+                        document.body.removeChild(a);
+                    }
                     URL.revokeObjectURL(url);
-                }, 1000);
+                }, 3000); // Increased to 3 seconds for slow mobile networks
 
                 downloadSuccessful = true;
                 console.log('Settings Backup v3: Exported via a.click()');
@@ -249,17 +277,34 @@ export async function exportSettings() {
         if (!downloadSuccessful) {
             try {
                 const url = URL.createObjectURL(zipBlob);
-                window.open(url);
-                setTimeout(() => URL.revokeObjectURL(url), 1000);
+                const opened = window.open(url, '_blank');
+
+                if (!opened) {
+                    // Popup blocked, try direct navigation
+                    window.location.href = url;
+                }
+
+                setTimeout(() => URL.revokeObjectURL(url), 3000);
+                downloadSuccessful = true;
                 console.log('Settings Backup v3: Exported via window.open()');
             } catch (error) {
-                throw new Error('All download methods failed. Please try a different browser.');
+                console.error('All download methods failed:', error);
+                removeLoadingOverlay();
+                alert('❌ Download failed. Your browser may be blocking downloads. Please check browser settings or try a different browser.');
+                return;
             }
         }
 
         removeLoadingOverlay();
         console.log('Settings Backup v3: Export successful!');
-        alert('✅ Settings exported successfully!');
+
+        // Show appropriate message based on method used
+        if (navigator.share && downloadSuccessful) {
+            // Likely used Web Share API - don't show alert as share dialog already appeared
+            console.log('Export completed via share dialog');
+        } else {
+            alert('✅ Settings exported successfully!\n\nCheck your Downloads folder for the ZIP file.');
+        }
 
     } catch (error) {
         removeLoadingOverlay();
