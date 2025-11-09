@@ -2736,8 +2736,11 @@
   var import_jszip = __toESM(require_jszip_min());
 
   // src/storage.ts
+  function isTauriEnvironment() {
+    return typeof window.__TAURI__ !== "undefined" || typeof window.__TAURI_INTERNALS__ !== "undefined";
+  }
   function createStorage() {
-    const isTauri = typeof window.__TAURI__ !== "undefined" || typeof window.__TAURI_INTERNALS__ !== "undefined";
+    const isTauri = isTauriEnvironment();
     if (isTauri) {
       console.log("[Storage] Tauri environment detected - IndexedDB not available");
     }
@@ -3039,11 +3042,11 @@
     buttonContainer.appendChild(importBtn);
     container.appendChild(pluginLabel);
     container.appendChild(buttonContainer);
-    injectIntoSettingsPage(container);
-    return container;
+    const intervalId = injectIntoSettingsPage(container);
+    return { container, intervalId };
   }
   function injectIntoSettingsPage(container) {
-    setInterval(() => {
+    const intervalId = setInterval(() => {
       const existing = document.getElementById("settings-backup-v3-ui");
       if (existing && existing.parentElement) {
         return;
@@ -3065,6 +3068,7 @@
         }
       }
     }, 500);
+    return intervalId;
   }
 
   // src/export.ts
@@ -3468,9 +3472,8 @@ Version: ${importedSettings.exportVersion || "Unknown"}
                   storageKey = await saveAsset(assetUint8Array, assetId, `${assetId}.${ext}`);
                   console.log(`\u2713 Restored (saveAsset): ${moduleId}/${assetId} \u2192 ${storageKey}`);
                 } catch (error) {
-                  const isTauri = typeof window.__TAURI__ !== "undefined" || typeof window.__TAURI_INTERNALS__ !== "undefined";
                   console.error(`saveAsset failed for ${assetId}:`, error);
-                  if (isTauri) {
+                  if (isTauriEnvironment()) {
                     throw new Error(`Tauri import failed: saveAsset() not available or failed. Cannot use IndexedDB fallback in Tauri.`);
                   }
                   console.warn(`Trying manual storage fallback...`);
@@ -3517,9 +3520,8 @@ Version: ${importedSettings.exportVersion || "Unknown"}
                 storageKey = await saveAsset(iconUint8Array, `persona-icon-${personaIndex}`, `persona-icon-${personaIndex}.${ext}`);
                 console.log(`\u2713 Restored persona icon ${personaIndex} (saveAsset): ${storageKey}`);
               } catch (error) {
-                const isTauri = typeof window.__TAURI__ !== "undefined" || typeof window.__TAURI_INTERNALS__ !== "undefined";
                 console.error(`saveAsset failed for persona icon ${personaIndex}:`, error);
-                if (isTauri) {
+                if (isTauriEnvironment()) {
                   throw new Error(`Tauri import failed: saveAsset() not available or failed. Cannot use IndexedDB fallback in Tauri.`);
                 }
                 console.warn(`Trying manual storage fallback...`);
@@ -3574,25 +3576,15 @@ Version: ${importedSettings.exportVersion || "Unknown"}
 
   // src/index.ts
   console.log("ResuAI: Initializing...");
-  console.log("[Test] Checking getFileSrc availability...");
-  console.log("[Test] globalThis.getFileSrc:", typeof globalThis.getFileSrc);
-  console.log("[Test] window.getFileSrc:", typeof window.getFileSrc);
-  console.log("[Test] globalThis.__pluginApis__:", typeof globalThis.__pluginApis__);
-  if (globalThis.getFileSrc) {
-    console.log("\u2705 [Test] getFileSrc found in globalThis!");
-  } else if (window.getFileSrc) {
-    console.log("\u2705 [Test] getFileSrc found in window!");
-  } else {
-    console.log("\u274C [Test] getFileSrc NOT FOUND");
-  }
-  var uiContainer = createUI({
+  var ui = createUI({
     onExport: exportSettings,
     onImport: importSettings
   });
   onUnload(() => {
     console.log("ResuAI: Cleaning up...");
-    if (document.body.contains(uiContainer)) {
-      document.body.removeChild(uiContainer);
+    clearInterval(ui.intervalId);
+    if (document.body.contains(ui.container)) {
+      document.body.removeChild(ui.container);
     }
   });
   console.log("ResuAI: Initialized successfully!");

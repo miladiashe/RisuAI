@@ -77,7 +77,12 @@ export interface UIOptions {
     onImport: () => void;
 }
 
-export function createUI(options: UIOptions) {
+export interface UICleanup {
+    container: HTMLElement;
+    intervalId: number;
+}
+
+export function createUI(options: UIOptions): UICleanup {
     const container = document.createElement('div');
     container.id = 'settings-backup-v3-ui';
     container.style.cssText = `
@@ -179,14 +184,14 @@ export function createUI(options: UIOptions) {
     container.appendChild(buttonContainer);
 
     // Try to inject into settings page
-    injectIntoSettingsPage(container);
+    const intervalId = injectIntoSettingsPage(container);
 
-    return container;
+    return { container, intervalId };
 }
 
-function injectIntoSettingsPage(container: HTMLElement) {
+function injectIntoSettingsPage(container: HTMLElement): number {
     // Check periodically for settings page
-    setInterval(() => {
+    const intervalId = setInterval(() => {
         // Skip if already injected and still in DOM
         const existing = document.getElementById('settings-backup-v3-ui');
         if (existing && existing.parentElement) {
@@ -221,4 +226,6 @@ function injectIntoSettingsPage(container: HTMLElement) {
             }
         }
     }, 500);
+
+    return intervalId;
 }

@@ -3,7 +3,7 @@
  */
 
 import JSZip from 'jszip';
-import { createStorage } from './storage';
+import { createStorage, isTauriEnvironment } from './storage';
 import { createLoadingOverlay, updateLoadingProgress, removeLoadingOverlay } from './ui';
 
 export async function importSettings() {
@@ -123,12 +123,9 @@ export async function importSettings() {
                                 console.log(`✓ Restored (saveAsset): ${moduleId}/${assetId} → ${storageKey}`);
                             } catch (error) {
                                 // Check if Tauri before fallback
-                                const isTauri = typeof (window as any).__TAURI__ !== 'undefined' ||
-                                                typeof (window as any).__TAURI_INTERNALS__ !== 'undefined';
-
                                 console.error(`saveAsset failed for ${assetId}:`, error);
 
-                                if (isTauri) {
+                                if (isTauriEnvironment()) {
                                     throw new Error(`Tauri import failed: saveAsset() not available or failed. Cannot use IndexedDB fallback in Tauri.`);
                                 }
 
@@ -194,12 +191,9 @@ export async function importSettings() {
                             console.log(`✓ Restored persona icon ${personaIndex} (saveAsset): ${storageKey}`);
                         } catch (error) {
                             // Check if Tauri before fallback
-                            const isTauri = typeof (window as any).__TAURI__ !== 'undefined' ||
-                                            typeof (window as any).__TAURI_INTERNALS__ !== 'undefined';
-
                             console.error(`saveAsset failed for persona icon ${personaIndex}:`, error);
 
-                            if (isTauri) {
+                            if (isTauriEnvironment()) {
                                 throw new Error(`Tauri import failed: saveAsset() not available or failed. Cannot use IndexedDB fallback in Tauri.`);
                             }
 

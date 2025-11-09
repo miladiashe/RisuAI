@@ -3,6 +3,14 @@
  * Automatically handles IndexedDB, Tauri, and Capacitor
  */
 
+/**
+ * Check if running in Tauri environment
+ */
+export function isTauriEnvironment(): boolean {
+    return typeof (window as any).__TAURI__ !== 'undefined' ||
+           typeof (window as any).__TAURI_INTERNALS__ !== 'undefined';
+}
+
 export interface StorageHelper {
     getItem: (key: string) => Promise<Uint8Array | null>;
     setItem: (key: string, value: Uint8Array) => Promise<void>;
@@ -16,8 +24,7 @@ export interface StorageHelper {
  */
 export function createStorage(): StorageHelper {
     // Detect Tauri environment (file system, no IndexedDB)
-    const isTauri = typeof (window as any).__TAURI__ !== 'undefined' ||
-                    typeof (window as any).__TAURI_INTERNALS__ !== 'undefined';
+    const isTauri = isTauriEnvironment();
 
     if (isTauri) {
         console.log('[Storage] Tauri environment detected - IndexedDB not available');
