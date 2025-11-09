@@ -86,7 +86,7 @@ export async function importSettings() {
                     updateLoadingProgress(
                         processedAssets,
                         assetFiles.length,
-                        `Restoring assets (${processedAssets}/${assetFiles.length})`
+                        'Restoring assets'
                     );
 
                     const file = zip.file(assetPath);
@@ -213,8 +213,8 @@ export async function importSettings() {
             // Save to database
             updateLoadingProgress(1, 1, 'Saving to database');
 
-            // @ts-ignore - setDatabase is a global function provided by RisuAI
-            setDatabase(importedSettings);
+            // @ts-ignore - setDatabaseLite is a global function provided by RisuAI
+            setDatabaseLite(importedSettings);
 
             removeLoadingOverlay();
             console.log('Settings Backup v3: Import successful!');
