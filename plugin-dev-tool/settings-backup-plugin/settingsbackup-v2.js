@@ -2904,6 +2904,10 @@
                 const assetId = asset[0];
                 const storageKey = asset[1];
                 const assetExt = asset[2] || "png";
+                if (!assetId || typeof assetId !== "string" || assetId.length === 0) {
+                  console.warn(`Skipping asset with empty ID: ${moduleId}-${i}`);
+                  continue;
+                }
                 if (!storageKey || typeof storageKey !== "string" || storageKey.length === 0) {
                   console.warn(`Skipping asset with empty storage key: ${moduleId}-${i}`);
                   continue;
@@ -2933,8 +2937,13 @@
                   console.warn(`Unknown asset data format for ${moduleId}-${i}:`, typeof assetData);
                   continue;
                 }
-                assetsFolder.file(`${moduleId}-${i}.${assetExt}`, base64Data, { base64: true });
-                console.log(`[${processedAssets}/${totalAssets}] Added asset: ${moduleId}-${i}.${assetExt}`);
+                const moduleFolder = assetsFolder.folder(moduleId);
+                if (!moduleFolder) {
+                  console.warn(`Failed to create folder for module: ${moduleId}`);
+                  continue;
+                }
+                moduleFolder.file(`${assetId}.${assetExt}`, base64Data, { base64: true });
+                console.log(`[${processedAssets}/${totalAssets}] Added asset: ${moduleId}/${assetId}.${assetExt}`);
               } catch (assetError) {
                 console.warn(`[${processedAssets}/${totalAssets}] Error processing asset ${moduleId}-${i}:`, assetError);
               }
@@ -3124,21 +3133,28 @@ Continue?`
               const file2 = zip.file(assetPath);
               if (file2 && !file2.dir) {
                 try {
-                  const filename = assetPath.split("/")[1];
-                  const match = filename.match(/^(.+)-(\d+)\.(.+)$/);
-                  if (match) {
-                    const moduleId = match[1];
-                    const index = parseInt(match[2]);
-                    const ext = match[3];
-                    const assetUint8Array = await file2.async("uint8array");
-                    const storageKey = `asset-${moduleId}-${index}-${Date.now()}`;
-                    await storage.setItem(storageKey, assetUint8Array);
-                    console.log(`Restored asset to storage: ${storageKey}`);
-                    if (!moduleAssets[moduleId]) {
-                      moduleAssets[moduleId] = [];
-                    }
-                    moduleAssets[moduleId].push([`asset-${moduleId}-${index}`, storageKey, ext]);
+                  const pathParts = assetPath.split("/");
+                  if (pathParts.length !== 3) {
+                    console.warn(`Invalid asset path structure: ${assetPath}`);
+                    continue;
                   }
+                  const moduleId = pathParts[1];
+                  const filename = pathParts[2];
+                  const lastDotIndex = filename.lastIndexOf(".");
+                  if (lastDotIndex === -1) {
+                    console.warn(`Invalid filename (no extension): ${filename}`);
+                    continue;
+                  }
+                  const assetId = filename.substring(0, lastDotIndex);
+                  const ext = filename.substring(lastDotIndex + 1);
+                  const assetUint8Array = await file2.async("uint8array");
+                  const storageKey = `${assetId}-imported-${Date.now()}`;
+                  await storage.setItem(storageKey, assetUint8Array);
+                  console.log(`Restored asset: ${moduleId}/${assetId} \u2192 storage: ${storageKey}`);
+                  if (!moduleAssets[moduleId]) {
+                    moduleAssets[moduleId] = [];
+                  }
+                  moduleAssets[moduleId].push([assetId, storageKey, ext]);
                 } catch (assetError) {
                   console.warn(`Error restoring asset ${assetPath}:`, assetError);
                 }
