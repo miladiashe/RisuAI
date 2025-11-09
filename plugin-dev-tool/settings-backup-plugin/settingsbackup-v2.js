@@ -3053,7 +3053,7 @@ Continue?`
               if (file2 && !file2.dir) {
                 try {
                   const filename = assetPath.split("/")[1];
-                  const match = filename.match(/^(.+?)-(\d+)\.(.+)$/);
+                  const match = filename.match(/^(.+)-(\d+)\.(.+)$/);
                   if (match) {
                     const moduleId = match[1];
                     const index = parseInt(match[2]);
@@ -3065,7 +3065,7 @@ Continue?`
                     if (!moduleAssets[moduleId]) {
                       moduleAssets[moduleId] = [];
                     }
-                    moduleAssets[moduleId][index] = [`asset-${moduleId}-${index}`, storageKey, ext];
+                    moduleAssets[moduleId].push([`asset-${moduleId}-${index}`, storageKey, ext]);
                   }
                 } catch (assetError) {
                   console.warn(`Error restoring asset ${assetPath}:`, assetError);
@@ -3077,13 +3077,17 @@ Continue?`
         delete importedSettings.exportDate;
         delete importedSettings.exportVersion;
         delete importedSettings.pluginName;
+        console.log("Module assets collected:", Object.keys(moduleAssets).length, "modules");
         if (importedSettings.modules && Array.isArray(importedSettings.modules)) {
           importedSettings.modules = importedSettings.modules.map((module) => {
             const assets = moduleAssets[module.id];
             if (assets && assets.length > 0) {
+              console.log(`Restoring ${assets.length} assets for module ${module.id}`);
               return { ...module, assets };
+            } else {
+              console.log(`No assets found for module ${module.id}`);
+              return module;
             }
-            return module;
           });
         }
         const mergedDb = {
