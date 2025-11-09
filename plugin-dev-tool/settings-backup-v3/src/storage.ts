@@ -10,42 +10,29 @@ export interface StorageHelper {
 }
 
 /**
- * Get RisuAI's getFileSrc function
- */
-function getFileSrcFunc(): ((loc: string) => Promise<string>) | null {
-    // Try multiple access patterns
-    if ((globalThis as any).getFileSrc) {
-        return (globalThis as any).getFileSrc;
-    }
-    if ((window as any).getFileSrc) {
-        return (window as any).getFileSrc;
-    }
-    if ((globalThis as any).__pluginApis__?.getFileSrc) {
-        return (globalThis as any).__pluginApis__.getFileSrc;
-    }
-    return null;
-}
-
-/**
- * Get RisuAI's forageStorage
- */
-function getForageStorage() {
-    if ((globalThis as any).forageStorage) {
-        return (globalThis as any).forageStorage;
-    }
-    if ((globalThis as any).localforage) {
-        return (globalThis as any).localforage.createInstance({ name: "risuai" });
-    }
-    throw new Error('No storage available');
-}
-
-/**
  * Create storage helper using RisuAI's getFileSrc + forageStorage
  * getFileSrc handles IndexedDB, SW cache, Tauri, and Capacitor
  */
 export function createStorage(): StorageHelper {
-    const storage = getForageStorage();
-    const getFileSrc = getFileSrcFunc();
+    // Get forageStorage directly inline
+    let storage: any;
+    if ((globalThis as any).forageStorage) {
+        storage = (globalThis as any).forageStorage;
+    } else if ((globalThis as any).localforage) {
+        storage = (globalThis as any).localforage.createInstance({ name: "risuai" });
+    } else {
+        throw new Error('No storage available (forageStorage/localforage not found)');
+    }
+
+    // Get getFileSrc directly inline
+    let getFileSrc: ((loc: string) => Promise<string>) | null = null;
+    if ((globalThis as any).getFileSrc) {
+        getFileSrc = (globalThis as any).getFileSrc;
+    } else if ((window as any).getFileSrc) {
+        getFileSrc = (window as any).getFileSrc;
+    } else if ((globalThis as any).__pluginApis__?.getFileSrc) {
+        getFileSrc = (globalThis as any).__pluginApis__.getFileSrc;
+    }
 
     return {
         /**
