@@ -324,7 +324,82 @@ export async function exportSettings() {
             // Used Web Share API - don't show alert as share dialog already appeared
             console.log('Export completed via share dialog');
         } else {
-            alert('✅ Settings exported successfully!\n\nCheck your Downloads folder for the ZIP file.');
+            // Check if we're on mobile and a.click() or window.open() was used
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+            if (isMobile) {
+                // On mobile, provide a clickable download link (workaround for gesture requirement)
+                const url = URL.createObjectURL(zipBlob);
+
+                // Create download dialog
+                const dialog = document.createElement('div');
+                dialog.id = 'backup-download-dialog';
+                dialog.style.cssText = `
+                    position: fixed;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    background: white;
+                    padding: 30px;
+                    border-radius: 10px;
+                    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+                    z-index: 10001;
+                    text-align: center;
+                    max-width: 90%;
+                `;
+
+                const title = document.createElement('h3');
+                title.textContent = '✅ Backup Ready!';
+                title.style.cssText = 'margin: 0 0 20px 0; color: #333;';
+
+                const message = document.createElement('p');
+                message.textContent = 'Click the button below to download:';
+                message.style.cssText = 'margin: 0 0 20px 0; color: #666;';
+
+                const downloadBtn = document.createElement('a');
+                downloadBtn.href = url;
+                downloadBtn.download = filename;
+                downloadBtn.textContent = '💾 Download Backup File';
+                downloadBtn.style.cssText = `
+                    display: inline-block;
+                    padding: 15px 30px;
+                    background: #4CAF50;
+                    color: white;
+                    text-decoration: none;
+                    border-radius: 5px;
+                    font-weight: bold;
+                    font-size: 16px;
+                    margin-bottom: 15px;
+                `;
+
+                const closeBtn = document.createElement('button');
+                closeBtn.textContent = 'Close';
+                closeBtn.style.cssText = `
+                    display: block;
+                    width: 100%;
+                    padding: 10px;
+                    background: #ddd;
+                    border: none;
+                    border-radius: 5px;
+                    cursor: pointer;
+                    margin-top: 10px;
+                `;
+                closeBtn.onclick = () => {
+                    document.body.removeChild(dialog);
+                    URL.revokeObjectURL(url);
+                };
+
+                dialog.appendChild(title);
+                dialog.appendChild(message);
+                dialog.appendChild(downloadBtn);
+                dialog.appendChild(closeBtn);
+                document.body.appendChild(dialog);
+
+                console.log('✅ Download link displayed for mobile');
+            } else {
+                // Desktop - regular alert
+                alert('✅ Settings exported successfully!\n\nCheck your Downloads folder for the ZIP file.');
+            }
         }
 
     } catch (error) {
