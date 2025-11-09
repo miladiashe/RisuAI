@@ -2855,18 +2855,25 @@
           storage = {
             getItem: async (key) => {
               return new Promise((resolve, reject) => {
-                const request = indexedDB.open("risuai", 1);
+                const request = indexedDB.open("risuai");
                 request.onsuccess = (event) => {
                   const db2 = event.target.result;
                   if (!db2.objectStoreNames.contains("keyvaluepairs")) {
+                    db2.close();
                     resolve(null);
                     return;
                   }
                   const transaction = db2.transaction(["keyvaluepairs"], "readonly");
                   const store = transaction.objectStore("keyvaluepairs");
                   const getRequest = store.get(key);
-                  getRequest.onsuccess = () => resolve(getRequest.result);
-                  getRequest.onerror = () => reject(getRequest.error);
+                  getRequest.onsuccess = () => {
+                    db2.close();
+                    resolve(getRequest.result);
+                  };
+                  getRequest.onerror = () => {
+                    db2.close();
+                    reject(getRequest.error);
+                  };
                 };
                 request.onerror = () => reject(request.error);
               });
@@ -3080,14 +3087,20 @@ Continue?`
           storage = {
             setItem: async (key, value) => {
               return new Promise((resolve, reject) => {
-                const request = indexedDB.open("risuai", 1);
+                const request = indexedDB.open("risuai");
                 request.onsuccess = (event) => {
                   const db2 = event.target.result;
                   const transaction = db2.transaction(["keyvaluepairs"], "readwrite");
                   const store = transaction.objectStore("keyvaluepairs");
                   const putRequest = store.put(value, key);
-                  putRequest.onsuccess = () => resolve();
-                  putRequest.onerror = () => reject(putRequest.error);
+                  putRequest.onsuccess = () => {
+                    db2.close();
+                    resolve();
+                  };
+                  putRequest.onerror = () => {
+                    db2.close();
+                    reject(putRequest.error);
+                  };
                 };
                 request.onerror = () => reject(request.error);
               });
