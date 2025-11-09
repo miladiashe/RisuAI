@@ -3149,9 +3149,11 @@
       let downloadSuccessful = false;
       let usedWebShare = false;
       if (navigator.share) {
+        console.log("[Debug] Attempting Web Share API...");
         try {
           const file = new File([zipBlob], filename, { type: "application/zip" });
           const canShareFiles = navigator.canShare ? navigator.canShare({ files: [file] }) : true;
+          console.log("[Debug] canShareFiles:", canShareFiles);
           if (canShareFiles) {
             await navigator.share({
               files: [file],
@@ -3160,21 +3162,27 @@
             });
             downloadSuccessful = true;
             usedWebShare = true;
-            console.log("Settings Backup v3: Exported via Web Share API");
+            console.log("\u2705 Settings Backup v3: Exported via Web Share API");
+          } else {
+            console.log("[Debug] canShare returned false, trying fallback");
           }
         } catch (error) {
           if (error instanceof Error && error.name === "AbortError") {
-            console.log("User cancelled share");
+            console.log("\u2139\uFE0F User cancelled share");
             downloadSuccessful = true;
             usedWebShare = true;
           } else {
-            console.warn("Web Share API failed, trying fallback:", error);
+            console.warn("\u274C Web Share API failed, trying fallback:", error);
           }
         }
+      } else {
+        console.log("[Debug] Web Share API not available");
       }
       if (!downloadSuccessful) {
+        console.log("[Debug] Attempting a.click() download...");
         try {
           const url = URL.createObjectURL(zipBlob);
+          console.log("[Debug] Created blob URL:", url.substring(0, 50) + "...");
           const a = document.createElement("a");
           a.href = url;
           a.download = filename;
@@ -3182,8 +3190,10 @@
           a.target = "_blank";
           a.rel = "noopener noreferrer";
           document.body.appendChild(a);
+          console.log("[Debug] Download link created and appended");
           if (a.click) {
             a.click();
+            console.log("[Debug] Clicked download link");
           } else {
             const clickEvent = new MouseEvent("click", {
               view: window,
@@ -3191,6 +3201,7 @@
               cancelable: true
             });
             a.dispatchEvent(clickEvent);
+            console.log("[Debug] Dispatched click event");
           }
           setTimeout(() => {
             if (a.parentElement) {
@@ -3199,23 +3210,28 @@
             URL.revokeObjectURL(url);
           }, 3e3);
           downloadSuccessful = true;
-          console.log("Settings Backup v3: Exported via a.click()");
+          console.log("\u2705 Settings Backup v3: Exported via a.click()");
         } catch (error) {
-          console.warn("a.click() download failed, trying window.open:", error);
+          console.warn("\u274C a.click() download failed, trying window.open:", error);
         }
       }
       if (!downloadSuccessful) {
+        console.log("[Debug] Attempting window.open()...");
         try {
           const url = URL.createObjectURL(zipBlob);
+          console.log("[Debug] Created blob URL for window.open");
           const opened = window.open(url, "_blank");
           if (!opened) {
+            console.log("[Debug] Popup blocked, trying location.href");
             window.location.href = url;
+          } else {
+            console.log("[Debug] Opened in new window/tab");
           }
           setTimeout(() => URL.revokeObjectURL(url), 3e3);
           downloadSuccessful = true;
-          console.log("Settings Backup v3: Exported via window.open()");
+          console.log("\u2705 Settings Backup v3: Exported via window.open()");
         } catch (error) {
-          console.error("All download methods failed:", error);
+          console.error("\u274C All download methods failed:", error);
           removeLoadingOverlay();
           alert("\u274C Download failed. Your browser may be blocking downloads. Please check browser settings or try a different browser.");
           return;
