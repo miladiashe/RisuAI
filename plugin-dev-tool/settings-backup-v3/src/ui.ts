@@ -82,55 +82,80 @@ export function createUI(options: UIOptions) {
     container.id = 'settings-backup-v3-ui';
     container.style.cssText = `
         display: flex;
-        gap: 10px;
-        margin-top: 10px;
-        padding: 15px;
-        background: rgba(76, 175, 80, 0.1);
-        border: 2px dashed #4CAF50;
-        border-radius: 8px;
+        gap: 12px;
+        margin-top: 12px;
+        padding: 18px;
+        background: linear-gradient(135deg, rgba(139, 92, 246, 0.08) 0%, rgba(59, 130, 246, 0.08) 100%);
+        border: 2px solid rgba(139, 92, 246, 0.2);
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        transition: all 0.3s ease;
     `;
 
     const pluginLabel = document.createElement('div');
-    pluginLabel.textContent = '🔌 Plugin: Settings Backup v3';
+    pluginLabel.textContent = '🔄 ResuAI';
     pluginLabel.style.cssText = `
         flex: 1;
         display: flex;
         align-items: center;
-        font-weight: bold;
-        color: #4CAF50;
-        font-size: 13px;
+        font-weight: 700;
+        background: linear-gradient(135deg, #8B5CF6 0%, #3B82F6 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        font-size: 16px;
+        letter-spacing: 0.5px;
     `;
 
     const buttonContainer = document.createElement('div');
     buttonContainer.style.cssText = `
         display: flex;
-        gap: 8px;
+        gap: 10px;
     `;
 
-    const buttonStyle = `
-        padding: 10px 16px;
-        background: #4CAF50;
+    const baseButtonStyle = `
+        padding: 12px 20px;
         color: white;
         border: none;
-        border-radius: 5px;
+        border-radius: 8px;
         cursor: pointer;
-        font-size: 13px;
-        font-weight: bold;
-        transition: background 0.2s;
+        font-size: 14px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+        display: flex;
+        align-items: center;
+        gap: 6px;
     `;
 
     const exportBtn = document.createElement('button');
-    exportBtn.textContent = '💾 Export';
-    exportBtn.style.cssText = buttonStyle;
-    exportBtn.onmouseenter = () => exportBtn.style.background = '#45a049';
-    exportBtn.onmouseleave = () => exportBtn.style.background = '#4CAF50';
+    exportBtn.textContent = '🎁 Save Snapshot';
+    exportBtn.style.cssText = baseButtonStyle + `
+        background: linear-gradient(135deg, #8B5CF6 0%, #A78BFA 100%);
+    `;
+    exportBtn.onmouseenter = () => {
+        exportBtn.style.transform = 'translateY(-2px)';
+        exportBtn.style.boxShadow = '0 4px 12px rgba(139, 92, 246, 0.4)';
+    };
+    exportBtn.onmouseleave = () => {
+        exportBtn.style.transform = 'translateY(0)';
+        exportBtn.style.boxShadow = '0 2px 6px rgba(0, 0, 0, 0.15)';
+    };
     exportBtn.onclick = options.onExport;
 
     const importBtn = document.createElement('button');
-    importBtn.textContent = '📥 Import';
-    importBtn.style.cssText = buttonStyle + 'background: #2196F3;';
-    importBtn.onmouseenter = () => importBtn.style.background = '#1976D2';
-    importBtn.onmouseleave = () => importBtn.style.background = '#2196F3';
+    importBtn.textContent = '⏮️ Restore Snapshot';
+    importBtn.style.cssText = baseButtonStyle + `
+        background: linear-gradient(135deg, #3B82F6 0%, #60A5FA 100%);
+    `;
+    importBtn.onmouseenter = () => {
+        importBtn.style.transform = 'translateY(-2px)';
+        importBtn.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.4)';
+    };
+    importBtn.onmouseleave = () => {
+        importBtn.style.transform = 'translateY(0)';
+        importBtn.style.boxShadow = '0 2px 6px rgba(0, 0, 0, 0.15)';
+    };
     importBtn.onclick = options.onImport;
 
     buttonContainer.appendChild(exportBtn);
@@ -177,7 +202,7 @@ function injectIntoSettingsPage(container: HTMLElement) {
 
                 // Insert after the h2 heading
                 heading.insertAdjacentElement('afterend', container);
-                console.log('Settings Backup v3: UI injected after heading');
+                console.log('ResuAI: UI injected into Settings page');
                 return;
             }
         }

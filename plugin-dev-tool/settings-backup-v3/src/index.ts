@@ -1,18 +1,21 @@
 /**
- * RisuAI Settings Backup & Restore Plugin v3
+ * ResuAI - RisuAI Settings Backup & Restore Plugin
+ *
+ * Resume your AI journey anytime, anywhere
  *
  * Features:
- * - Export/Import settings as ZIP
- * - Include module assets with proper folder structure
- * - Include persona profile icons
- * - Service Worker cache fallback for missing assets
+ * - Export/Import settings as ZIP snapshots
+ * - Cross-platform support (Web, Tauri, Capacitor)
+ * - Service Worker cache recovery
+ * - Module assets with proper folder structure
+ * - Persona profile icons
  */
 
 import { exportSettings } from './export';
 import { importSettings } from './import';
 import { createUI } from './ui';
 
-console.log('Settings Backup v3: Initializing...');
+console.log('ResuAI: Initializing...');
 
 // Test getFileSrc availability
 console.log('[Test] Checking getFileSrc availability...');
@@ -36,10 +39,10 @@ const uiContainer = createUI({
 
 // Cleanup on plugin unload
 onUnload(() => {
-    console.log('Settings Backup v3: Cleaning up...');
+    console.log('ResuAI: Cleaning up...');
     if (document.body.contains(uiContainer)) {
         document.body.removeChild(uiContainer);
     }
 });
 
-console.log('Settings Backup v3: Initialized successfully!');
+console.log('ResuAI: Initialized successfully!');

@@ -7,7 +7,7 @@ import { createStorage } from './storage';
 import { createLoadingOverlay, updateLoadingProgress, removeLoadingOverlay } from './ui';
 
 export async function importSettings() {
-    console.log('Settings Backup v3: Starting import...');
+    console.log('ResuAI: Starting import...');
 
     // File picker
     const input = document.createElement('input');
@@ -255,7 +255,7 @@ export async function importSettings() {
             setDatabaseLite(importedSettings);
 
             removeLoadingOverlay();
-            console.log('Settings Backup v3: Import successful!');
+            console.log('ResuAI: Import successful!');
             alert(
                 '✅ Settings imported successfully!\n\n' +
                 '⚠️ Please wait for a while for auto save and refresh manually.'
@@ -263,7 +263,7 @@ export async function importSettings() {
 
         } catch (error) {
             removeLoadingOverlay();
-            console.error('Settings Backup v3: Import failed', error);
+            console.error('ResuAI: Import failed', error);
             alert('❌ Import failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
         }
     };

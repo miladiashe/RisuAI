@@ -6,7 +6,7 @@ import JSZip from 'jszip';
 import { createStorage } from './storage';
 import { createLoadingOverlay, updateLoadingProgress, removeLoadingOverlay } from './ui';
 export async function exportSettings() {
-    console.log('Settings Backup v3: Starting export...');
+    console.log('ResuAI: Starting export...');
     const overlay = createLoadingOverlay('💾 Exporting Settings');
 
     try {
@@ -225,7 +225,7 @@ export async function exportSettings() {
                     });
                     downloadSuccessful = true;
                     usedWebShare = true;
-                    console.log('✅ Settings Backup v3: Exported via Web Share API');
+                    console.log('✅ ResuAI: Exported via Web Share API');
                 } else {
                     console.log('[Debug] canShare returned false, trying fallback');
                 }
@@ -283,7 +283,7 @@ export async function exportSettings() {
                 }, 3000); // Increased to 3 seconds for slow mobile networks
 
                 downloadSuccessful = true;
-                console.log('✅ Settings Backup v3: Exported via a.click()');
+                console.log('✅ ResuAI: Exported via a.click()');
             } catch (error) {
                 console.warn('❌ a.click() download failed, trying window.open:', error);
             }
@@ -307,7 +307,7 @@ export async function exportSettings() {
 
                 setTimeout(() => URL.revokeObjectURL(url), 3000);
                 downloadSuccessful = true;
-                console.log('✅ Settings Backup v3: Exported via window.open()');
+                console.log('✅ ResuAI: Exported via window.open()');
             } catch (error) {
                 console.error('❌ All download methods failed:', error);
                 removeLoadingOverlay();
@@ -317,7 +317,7 @@ export async function exportSettings() {
         }
 
         removeLoadingOverlay();
-        console.log('Settings Backup v3: Export successful!');
+        console.log('ResuAI: Export successful!');
 
         // Show appropriate message based on method used
         if (usedWebShare) {
@@ -404,7 +404,7 @@ export async function exportSettings() {
 
     } catch (error) {
         removeLoadingOverlay();
-        console.error('Settings Backup v3: Export failed', error);
+        console.error('ResuAI: Export failed', error);
         alert('❌ Export failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
 }

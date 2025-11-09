@@ -1,5 +1,5 @@
 //@name settingsbackup-v3
-//@display-name Settings Backup & Restore v3
+//@display-name ResuAI
 
 "use strict";
 (() => {
@@ -2956,50 +2956,75 @@
     container.id = "settings-backup-v3-ui";
     container.style.cssText = `
         display: flex;
-        gap: 10px;
-        margin-top: 10px;
-        padding: 15px;
-        background: rgba(76, 175, 80, 0.1);
-        border: 2px dashed #4CAF50;
-        border-radius: 8px;
+        gap: 12px;
+        margin-top: 12px;
+        padding: 18px;
+        background: linear-gradient(135deg, rgba(139, 92, 246, 0.08) 0%, rgba(59, 130, 246, 0.08) 100%);
+        border: 2px solid rgba(139, 92, 246, 0.2);
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        transition: all 0.3s ease;
     `;
     const pluginLabel = document.createElement("div");
-    pluginLabel.textContent = "\u{1F50C} Plugin: Settings Backup v3";
+    pluginLabel.textContent = "\u{1F504} ResuAI";
     pluginLabel.style.cssText = `
         flex: 1;
         display: flex;
         align-items: center;
-        font-weight: bold;
-        color: #4CAF50;
-        font-size: 13px;
+        font-weight: 700;
+        background: linear-gradient(135deg, #8B5CF6 0%, #3B82F6 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        font-size: 16px;
+        letter-spacing: 0.5px;
     `;
     const buttonContainer = document.createElement("div");
     buttonContainer.style.cssText = `
         display: flex;
-        gap: 8px;
+        gap: 10px;
     `;
-    const buttonStyle = `
-        padding: 10px 16px;
-        background: #4CAF50;
+    const baseButtonStyle = `
+        padding: 12px 20px;
         color: white;
         border: none;
-        border-radius: 5px;
+        border-radius: 8px;
         cursor: pointer;
-        font-size: 13px;
-        font-weight: bold;
-        transition: background 0.2s;
+        font-size: 14px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+        display: flex;
+        align-items: center;
+        gap: 6px;
     `;
     const exportBtn = document.createElement("button");
-    exportBtn.textContent = "\u{1F4BE} Export";
-    exportBtn.style.cssText = buttonStyle;
-    exportBtn.onmouseenter = () => exportBtn.style.background = "#45a049";
-    exportBtn.onmouseleave = () => exportBtn.style.background = "#4CAF50";
+    exportBtn.textContent = "\u{1F381} Save Snapshot";
+    exportBtn.style.cssText = baseButtonStyle + `
+        background: linear-gradient(135deg, #8B5CF6 0%, #A78BFA 100%);
+    `;
+    exportBtn.onmouseenter = () => {
+      exportBtn.style.transform = "translateY(-2px)";
+      exportBtn.style.boxShadow = "0 4px 12px rgba(139, 92, 246, 0.4)";
+    };
+    exportBtn.onmouseleave = () => {
+      exportBtn.style.transform = "translateY(0)";
+      exportBtn.style.boxShadow = "0 2px 6px rgba(0, 0, 0, 0.15)";
+    };
     exportBtn.onclick = options.onExport;
     const importBtn = document.createElement("button");
-    importBtn.textContent = "\u{1F4E5} Import";
-    importBtn.style.cssText = buttonStyle + "background: #2196F3;";
-    importBtn.onmouseenter = () => importBtn.style.background = "#1976D2";
-    importBtn.onmouseleave = () => importBtn.style.background = "#2196F3";
+    importBtn.textContent = "\u23EE\uFE0F Restore Snapshot";
+    importBtn.style.cssText = baseButtonStyle + `
+        background: linear-gradient(135deg, #3B82F6 0%, #60A5FA 100%);
+    `;
+    importBtn.onmouseenter = () => {
+      importBtn.style.transform = "translateY(-2px)";
+      importBtn.style.boxShadow = "0 4px 12px rgba(59, 130, 246, 0.4)";
+    };
+    importBtn.onmouseleave = () => {
+      importBtn.style.transform = "translateY(0)";
+      importBtn.style.boxShadow = "0 2px 6px rgba(0, 0, 0, 0.15)";
+    };
     importBtn.onclick = options.onImport;
     buttonContainer.appendChild(exportBtn);
     buttonContainer.appendChild(importBtn);
@@ -3026,7 +3051,7 @@
             existing.remove();
           }
           heading.insertAdjacentElement("afterend", container);
-          console.log("Settings Backup v3: UI injected after heading");
+          console.log("ResuAI: UI injected into Settings page");
           return;
         }
       }
@@ -3035,7 +3060,7 @@
 
   // src/export.ts
   async function exportSettings() {
-    console.log("Settings Backup v3: Starting export...");
+    console.log("ResuAI: Starting export...");
     const overlay = createLoadingOverlay("\u{1F4BE} Exporting Settings");
     try {
       const db = getDatabase();
@@ -3199,7 +3224,7 @@
             });
             downloadSuccessful = true;
             usedWebShare = true;
-            console.log("\u2705 Settings Backup v3: Exported via Web Share API");
+            console.log("\u2705 ResuAI: Exported via Web Share API");
           } else {
             console.log("[Debug] canShare returned false, trying fallback");
           }
@@ -3247,7 +3272,7 @@
             URL.revokeObjectURL(url);
           }, 3e3);
           downloadSuccessful = true;
-          console.log("\u2705 Settings Backup v3: Exported via a.click()");
+          console.log("\u2705 ResuAI: Exported via a.click()");
         } catch (error) {
           console.warn("\u274C a.click() download failed, trying window.open:", error);
         }
@@ -3266,7 +3291,7 @@
           }
           setTimeout(() => URL.revokeObjectURL(url), 3e3);
           downloadSuccessful = true;
-          console.log("\u2705 Settings Backup v3: Exported via window.open()");
+          console.log("\u2705 ResuAI: Exported via window.open()");
         } catch (error) {
           console.error("\u274C All download methods failed:", error);
           removeLoadingOverlay();
@@ -3275,7 +3300,7 @@
         }
       }
       removeLoadingOverlay();
-      console.log("Settings Backup v3: Export successful!");
+      console.log("ResuAI: Export successful!");
       if (usedWebShare) {
         console.log("Export completed via share dialog");
       } else {
@@ -3346,7 +3371,7 @@
       }
     } catch (error) {
       removeLoadingOverlay();
-      console.error("Settings Backup v3: Export failed", error);
+      console.error("ResuAI: Export failed", error);
       alert("\u274C Export failed: " + (error instanceof Error ? error.message : "Unknown error"));
     }
   }
@@ -3354,7 +3379,7 @@
   // src/import.ts
   var import_jszip2 = __toESM(require_jszip_min());
   async function importSettings() {
-    console.log("Settings Backup v3: Starting import...");
+    console.log("ResuAI: Starting import...");
     const input = document.createElement("input");
     input.type = "file";
     input.accept = ".zip";
@@ -3525,13 +3550,13 @@ Version: ${importedSettings.exportVersion || "Unknown"}
         updateLoadingProgress(1, 1, "Saving to database");
         setDatabaseLite(importedSettings);
         removeLoadingOverlay();
-        console.log("Settings Backup v3: Import successful!");
+        console.log("ResuAI: Import successful!");
         alert(
           "\u2705 Settings imported successfully!\n\n\u26A0\uFE0F Please wait for a while for auto save and refresh manually."
         );
       } catch (error) {
         removeLoadingOverlay();
-        console.error("Settings Backup v3: Import failed", error);
+        console.error("ResuAI: Import failed", error);
         alert("\u274C Import failed: " + (error instanceof Error ? error.message : "Unknown error"));
       }
     };
@@ -3539,7 +3564,7 @@ Version: ${importedSettings.exportVersion || "Unknown"}
   }
 
   // src/index.ts
-  console.log("Settings Backup v3: Initializing...");
+  console.log("ResuAI: Initializing...");
   console.log("[Test] Checking getFileSrc availability...");
   console.log("[Test] globalThis.getFileSrc:", typeof globalThis.getFileSrc);
   console.log("[Test] window.getFileSrc:", typeof window.getFileSrc);
@@ -3556,12 +3581,12 @@ Version: ${importedSettings.exportVersion || "Unknown"}
     onImport: importSettings
   });
   onUnload(() => {
-    console.log("Settings Backup v3: Cleaning up...");
+    console.log("ResuAI: Cleaning up...");
     if (document.body.contains(uiContainer)) {
       document.body.removeChild(uiContainer);
     }
   });
-  console.log("Settings Backup v3: Initialized successfully!");
+  console.log("ResuAI: Initialized successfully!");
 })();
 /*! Bundled license information:
 
