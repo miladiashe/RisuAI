@@ -3146,17 +3146,52 @@
       updateLoadingProgress(1, 1, "Generating ZIP file");
       const zipBlob = await zip.generateAsync({ type: "blob" });
       const filename = `risuai-settings-v3-${(/* @__PURE__ */ new Date()).toISOString().split("T")[0]}.zip`;
-      const url = URL.createObjectURL(zipBlob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      a.style.display = "none";
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(() => {
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      }, 1e3);
+      let downloadSuccessful = false;
+      if (navigator.share && navigator.canShare) {
+        try {
+          const file = new File([zipBlob], filename, { type: "application/zip" });
+          if (navigator.canShare({ files: [file] })) {
+            await navigator.share({
+              files: [file],
+              title: "RisuAI Settings Backup",
+              text: "Settings backup file"
+            });
+            downloadSuccessful = true;
+            console.log("Settings Backup v3: Exported via Web Share API");
+          }
+        } catch (error) {
+          console.warn("Web Share API failed, trying fallback:", error);
+        }
+      }
+      if (!downloadSuccessful) {
+        try {
+          const url = URL.createObjectURL(zipBlob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = filename;
+          a.style.display = "none";
+          document.body.appendChild(a);
+          a.click();
+          setTimeout(() => {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+          }, 1e3);
+          downloadSuccessful = true;
+          console.log("Settings Backup v3: Exported via a.click()");
+        } catch (error) {
+          console.warn("a.click() download failed, trying window.open:", error);
+        }
+      }
+      if (!downloadSuccessful) {
+        try {
+          const url = URL.createObjectURL(zipBlob);
+          window.open(url);
+          setTimeout(() => URL.revokeObjectURL(url), 1e3);
+          console.log("Settings Backup v3: Exported via window.open()");
+        } catch (error) {
+          throw new Error("All download methods failed. Please try a different browser.");
+        }
+      }
       removeLoadingOverlay();
       console.log("Settings Backup v3: Export successful!");
       alert("\u2705 Settings exported successfully!");
