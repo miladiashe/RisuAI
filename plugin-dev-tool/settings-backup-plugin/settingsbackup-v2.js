@@ -2843,13 +2843,41 @@
       zip.file("settings.json", jsonString);
       const assetsFolder = zip.folder("module-assets");
       if (assetsFolder) {
-        const storage = typeof localforage !== "undefined" ? localforage.createInstance({ name: "risuai" }) : null;
+        let storage = null;
+        if (typeof localforage !== "undefined") {
+          console.log("Using localforage");
+          storage = localforage.createInstance({ name: "risuai" });
+        } else if (typeof indexedDB !== "undefined") {
+          console.log("Using IndexedDB directly");
+          storage = {
+            getItem: async (key) => {
+              return new Promise((resolve, reject) => {
+                const request = indexedDB.open("risuai", 1);
+                request.onsuccess = (event) => {
+                  const db2 = event.target.result;
+                  if (!db2.objectStoreNames.contains("keyvaluepairs")) {
+                    resolve(null);
+                    return;
+                  }
+                  const transaction = db2.transaction(["keyvaluepairs"], "readonly");
+                  const store = transaction.objectStore("keyvaluepairs");
+                  const getRequest = store.get(key);
+                  getRequest.onsuccess = () => resolve(getRequest.result);
+                  getRequest.onerror = () => reject(getRequest.error);
+                };
+                request.onerror = () => reject(request.error);
+              });
+            }
+          };
+        }
         if (!storage) {
-          console.warn("localforage not available, skipping module assets");
+          console.warn("No storage available (tried localforage and IndexedDB), skipping module assets");
         } else {
           const totalAssets = Object.values(moduleAssets).reduce((sum, assets) => sum + assets.length, 0);
           let processedAssets = 0;
           console.log(`Processing ${totalAssets} module assets...`);
+          console.log("Storage instance:", storage);
+          console.log("Storage type:", storage.constructor?.name);
           updateLoadingProgress(0, totalAssets, "Processing module assets");
           for (const [moduleId, assets] of Object.entries(moduleAssets)) {
             for (let i = 0; i < assets.length; i++) {
@@ -3037,12 +3065,34 @@ Continue?`
         const currentCharacterOrder = db.characterOrder;
         updateLoadingProgress2("Processing module assets...");
         const moduleAssets = {};
-        const storage = typeof localforage !== "undefined" ? localforage.createInstance({ name: "risuai" }) : null;
+        let storage = null;
+        if (typeof localforage !== "undefined") {
+          console.log("Import: Using localforage");
+          storage = localforage.createInstance({ name: "risuai" });
+        } else if (typeof indexedDB !== "undefined") {
+          console.log("Import: Using IndexedDB directly");
+          storage = {
+            setItem: async (key, value) => {
+              return new Promise((resolve, reject) => {
+                const request = indexedDB.open("risuai", 1);
+                request.onsuccess = (event) => {
+                  const db2 = event.target.result;
+                  const transaction = db2.transaction(["keyvaluepairs"], "readwrite");
+                  const store = transaction.objectStore("keyvaluepairs");
+                  const putRequest = store.put(value, key);
+                  putRequest.onsuccess = () => resolve();
+                  putRequest.onerror = () => reject(putRequest.error);
+                };
+                request.onerror = () => reject(request.error);
+              });
+            }
+          };
+        }
         const assetsFolder = zip.folder("module-assets");
         if (assetsFolder) {
           const assetFiles = Object.keys(zip.files).filter((name) => name.startsWith("module-assets/"));
           if (!storage) {
-            console.warn("localforage not available, skipping module assets restoration");
+            console.warn("No storage available (tried localforage and IndexedDB), skipping module assets restoration");
           } else {
             let processedAssets = 0;
             const totalAssets = assetFiles.length;
