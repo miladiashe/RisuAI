@@ -199,15 +199,23 @@ export async function exportSettings() {
         updateLoadingProgress(1, 1, "Generating ZIP file");
         const zipBlob = await zip.generateAsync({ type: "blob" });
 
-        // Download
+        // Download (mobile-friendly)
+        const filename = `risuai-settings-v3-${new Date().toISOString().split('T')[0]}.zip`;
         const url = URL.createObjectURL(zipBlob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `risuai-settings-v3-${new Date().toISOString().split('T')[0]}.zip`;
+        a.download = filename;
+        a.style.display = 'none';
         document.body.appendChild(a);
+
+        // Trigger download
         a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+
+        // Clean up after delay (mobile browsers need time)
+        setTimeout(() => {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }, 1000);
 
         removeLoadingOverlay();
         console.log('Settings Backup v3: Export successful!');
