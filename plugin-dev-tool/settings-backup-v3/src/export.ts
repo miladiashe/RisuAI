@@ -206,6 +206,7 @@ export async function exportSettings() {
 
         // Strategy 1: Web Share API (mobile HTTPS, Tauri)
         if (navigator.share) {
+            console.log('[Debug] Attempting Web Share API...');
             try {
                 const file = new File([zipBlob], filename, { type: 'application/zip' });
 
@@ -213,6 +214,8 @@ export async function exportSettings() {
                 const canShareFiles = navigator.canShare
                     ? navigator.canShare({ files: [file] })
                     : true; // Assume it can share if canShare not available
+
+                console.log('[Debug] canShareFiles:', canShareFiles);
 
                 if (canShareFiles) {
                     await navigator.share({
@@ -222,24 +225,31 @@ export async function exportSettings() {
                     });
                     downloadSuccessful = true;
                     usedWebShare = true;
-                    console.log('Settings Backup v3: Exported via Web Share API');
+                    console.log('✅ Settings Backup v3: Exported via Web Share API');
+                } else {
+                    console.log('[Debug] canShare returned false, trying fallback');
                 }
             } catch (error) {
                 // User cancelled or share failed
                 if (error instanceof Error && error.name === 'AbortError') {
-                    console.log('User cancelled share');
+                    console.log('ℹ️ User cancelled share');
                     downloadSuccessful = true; // Don't fallback if user cancelled
                     usedWebShare = true;
                 } else {
-                    console.warn('Web Share API failed, trying fallback:', error);
+                    console.warn('❌ Web Share API failed, trying fallback:', error);
                 }
             }
+        } else {
+            console.log('[Debug] Web Share API not available');
         }
 
         // Strategy 2: a.click() download (desktop, most browsers)
         if (!downloadSuccessful) {
+            console.log('[Debug] Attempting a.click() download...');
             try {
                 const url = URL.createObjectURL(zipBlob);
+                console.log('[Debug] Created blob URL:', url.substring(0, 50) + '...');
+
                 const a = document.createElement('a');
                 a.href = url;
                 a.download = filename;
@@ -247,10 +257,12 @@ export async function exportSettings() {
                 a.target = '_blank';
                 a.rel = 'noopener noreferrer';
                 document.body.appendChild(a);
+                console.log('[Debug] Download link created and appended');
 
                 // Try multiple trigger methods for compatibility
                 if (a.click) {
                     a.click();
+                    console.log('[Debug] Clicked download link');
                 } else {
                     // Fallback for older browsers
                     const clickEvent = new MouseEvent('click', {
@@ -259,6 +271,7 @@ export async function exportSettings() {
                         cancelable: true
                     });
                     a.dispatchEvent(clickEvent);
+                    console.log('[Debug] Dispatched click event');
                 }
 
                 // Clean up after delay (mobile browsers need time)
@@ -270,28 +283,33 @@ export async function exportSettings() {
                 }, 3000); // Increased to 3 seconds for slow mobile networks
 
                 downloadSuccessful = true;
-                console.log('Settings Backup v3: Exported via a.click()');
+                console.log('✅ Settings Backup v3: Exported via a.click()');
             } catch (error) {
-                console.warn('a.click() download failed, trying window.open:', error);
+                console.warn('❌ a.click() download failed, trying window.open:', error);
             }
         }
 
         // Strategy 3: window.open() (last resort)
         if (!downloadSuccessful) {
+            console.log('[Debug] Attempting window.open()...');
             try {
                 const url = URL.createObjectURL(zipBlob);
+                console.log('[Debug] Created blob URL for window.open');
                 const opened = window.open(url, '_blank');
 
                 if (!opened) {
+                    console.log('[Debug] Popup blocked, trying location.href');
                     // Popup blocked, try direct navigation
                     window.location.href = url;
+                } else {
+                    console.log('[Debug] Opened in new window/tab');
                 }
 
                 setTimeout(() => URL.revokeObjectURL(url), 3000);
                 downloadSuccessful = true;
-                console.log('Settings Backup v3: Exported via window.open()');
+                console.log('✅ Settings Backup v3: Exported via window.open()');
             } catch (error) {
-                console.error('All download methods failed:', error);
+                console.error('❌ All download methods failed:', error);
                 removeLoadingOverlay();
                 alert('❌ Download failed. Your browser may be blocking downloads. Please check browser settings or try a different browser.');
                 return;
