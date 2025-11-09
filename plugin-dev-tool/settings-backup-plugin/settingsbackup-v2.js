@@ -2823,6 +2823,24 @@
         }
         console.log(`Modules with assets: ${Object.keys(moduleAssets).length}`);
       }
+      const personaIcons = [];
+      if (db.personas && Array.isArray(db.personas)) {
+        console.log(`Total personas in database: ${db.personas.length}`);
+        for (let i = 0; i < db.personas.length; i++) {
+          const persona = db.personas[i];
+          if (persona.icon && typeof persona.icon === "string" && persona.icon.length > 0) {
+            personaIcons.push({
+              index: i,
+              id: persona.id,
+              name: persona.name || `persona-${i}`,
+              icon: persona.icon
+              // storage key
+            });
+            console.log(`Persona ${i} (${persona.name}): has icon`);
+          }
+        }
+        console.log(`Personas with icons: ${personaIcons.length}`);
+      }
       const settingsBackup = {
         ...db,
         characters: void 0,
@@ -2949,7 +2967,54 @@
               }
             }
           }
-          console.log(`Completed processing ${processedAssets} assets`);
+          console.log(`Completed processing ${processedAssets} module assets`);
+          if (personaIcons.length > 0) {
+            console.log(`Processing ${personaIcons.length} persona icons...`);
+            const personaFolder = zip.folder("persona-icons");
+            if (!personaFolder) {
+              console.warn("Failed to create persona-icons folder");
+            } else {
+              let processedIcons = 0;
+              for (const personaInfo of personaIcons) {
+                processedIcons++;
+                updateLoadingProgress(processedIcons, personaIcons.length, "Processing persona icons");
+                try {
+                  const storageKey = personaInfo.icon;
+                  const iconData = await storage.getItem(storageKey);
+                  if (!iconData) {
+                    console.warn(`Persona icon not found in storage: ${storageKey}`);
+                    continue;
+                  }
+                  let base64Data;
+                  if (iconData instanceof Uint8Array || iconData instanceof ArrayBuffer) {
+                    const uint8Array = iconData instanceof ArrayBuffer ? new Uint8Array(iconData) : iconData;
+                    const binaryString = Array.from(uint8Array).map((byte) => String.fromCharCode(byte)).join("");
+                    base64Data = btoa(binaryString);
+                  } else if (typeof iconData === "string") {
+                    if (iconData.startsWith("data:")) {
+                      const parts = iconData.split(",");
+                      if (parts.length < 2) {
+                        console.warn(`Invalid data URI for persona icon ${personaInfo.index}`);
+                        continue;
+                      }
+                      base64Data = parts[1];
+                    } else {
+                      base64Data = iconData;
+                    }
+                  } else {
+                    console.warn(`Unknown icon data format for persona ${personaInfo.index}:`, typeof iconData);
+                    continue;
+                  }
+                  const filename = `persona-${personaInfo.index}.png`;
+                  personaFolder.file(filename, base64Data, { base64: true });
+                  console.log(`[${processedIcons}/${personaIcons.length}] Added persona icon: ${filename} (${personaInfo.name})`);
+                } catch (iconError) {
+                  console.warn(`Error processing persona icon ${personaInfo.index}:`, iconError);
+                }
+              }
+              console.log(`Completed processing ${processedIcons} persona icons`);
+            }
+          }
         }
       }
       updateLoadingProgress(1, 1, "Creating ZIP file");
@@ -3177,6 +3242,45 @@ Continue?`
               return module;
             }
           });
+        }
+        updateLoadingProgress2("Processing persona icons...");
+        const personaIconFolder = zip.folder("persona-icons");
+        if (personaIconFolder && storage) {
+          const iconFiles = Object.keys(zip.files).filter(
+            (name) => name.startsWith("persona-icons/") && !zip.files[name].dir
+          );
+          console.log(`Found ${iconFiles.length} persona icon files in ZIP`);
+          for (const iconPath of iconFiles) {
+            try {
+              const filename = iconPath.split("/")[1];
+              const match = filename.match(/^persona-(\d+)\.(.+)$/);
+              if (!match) {
+                console.warn(`Invalid persona icon filename: ${filename}`);
+                continue;
+              }
+              const personaIndex = parseInt(match[1], 10);
+              const ext = match[2];
+              const file2 = zip.file(iconPath);
+              if (!file2) {
+                console.warn(`Failed to read persona icon: ${iconPath}`);
+                continue;
+              }
+              const iconUint8Array = await file2.async("uint8array");
+              const storageKey = `persona-icon-${personaIndex}-imported-${Date.now()}`;
+              await storage.setItem(storageKey, iconUint8Array);
+              console.log(`Restored persona icon ${personaIndex}: ${storageKey}`);
+              if (importedSettings.personas && Array.isArray(importedSettings.personas) && importedSettings.personas[personaIndex]) {
+                importedSettings.personas[personaIndex].icon = storageKey;
+                console.log(`Updated persona ${personaIndex} icon reference`);
+              } else {
+                console.warn(`Persona ${personaIndex} not found in imported settings`);
+              }
+            } catch (iconError) {
+              console.warn(`Error restoring persona icon ${iconPath}:`, iconError);
+            }
+          }
+        } else if (personaIconFolder && !storage) {
+          console.warn("Persona icons found but no storage available, skipping");
         }
         const mergedDb = {
           ...importedSettings,
