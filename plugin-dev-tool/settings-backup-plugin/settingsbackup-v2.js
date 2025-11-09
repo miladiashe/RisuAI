@@ -2737,6 +2737,13 @@
   var import_jszip = __toESM(require_jszip_min());
   async function exportSettings() {
     console.log("Settings Backup: Exporting settings...");
+    const confirmed = confirm(
+      "\u{1F4BE} Export Settings\n\n\u26A0\uFE0F Please do not modify settings, modules, or assets during the export process.\n\nThis may take a few seconds depending on the number of modules.\n\nContinue?"
+    );
+    if (!confirmed) {
+      console.log("Settings Backup: Export cancelled by user");
+      return;
+    }
     try {
       const db = getDatabase();
       const moduleAssets = {};
@@ -2774,8 +2781,12 @@
         if (!storage) {
           console.warn("localforage not available, skipping module assets");
         } else {
+          const totalAssets = Object.values(moduleAssets).reduce((sum, assets) => sum + assets.length, 0);
+          let processedAssets = 0;
+          console.log(`Processing ${totalAssets} module assets...`);
           for (const [moduleId, assets] of Object.entries(moduleAssets)) {
             for (let i = 0; i < assets.length; i++) {
+              processedAssets++;
               try {
                 const asset = assets[i];
                 if (!asset || !Array.isArray(asset)) {
@@ -2814,12 +2825,13 @@
                   continue;
                 }
                 assetsFolder.file(`${moduleId}-${i}.${assetExt}`, base64Data, { base64: true });
-                console.log(`Added asset: ${moduleId}-${i}.${assetExt}`);
+                console.log(`[${processedAssets}/${totalAssets}] Added asset: ${moduleId}-${i}.${assetExt}`);
               } catch (assetError) {
-                console.warn(`Error processing asset ${moduleId}-${i}:`, assetError);
+                console.warn(`[${processedAssets}/${totalAssets}] Error processing asset ${moduleId}-${i}:`, assetError);
               }
             }
           }
+          console.log(`Completed processing ${processedAssets} assets`);
         }
       }
       const zipBlob = await zip.generateAsync({ type: "blob" });
