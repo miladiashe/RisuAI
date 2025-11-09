@@ -147,52 +147,39 @@ export function createUI(options: UIOptions) {
 
 function injectIntoSettingsPage(container: HTMLElement) {
     // Check periodically for settings page
-    const checkInterval = setInterval(() => {
+    setInterval(() => {
+        // Skip if already injected and still in DOM
+        const existing = document.getElementById('settings-backup-v3-ui');
+        if (existing && existing.parentElement) {
+            return;
+        }
+
         // Get localized section name
         const sectionName = `${getLocalizedText('account')} & ${getLocalizedText('files')}`;
 
-        // Look for settings page indicators
-        const settingsPage = document.querySelector('[data-page="settings"]') ||
-                            document.querySelector('.settings-page') ||
-                            Array.from(document.querySelectorAll('*')).find(el =>
-                                el.textContent?.includes(sectionName) ||
-                                el.textContent?.includes('Account') ||
-                                el.textContent?.includes('계정')
-                            )?.closest('div');
+        // Look for UserSettings page container (rs-setting-cont-4)
+        const settingsContainer = document.querySelector('.rs-setting-cont-4');
 
-        if (settingsPage && !document.getElementById('settings-backup-v3-ui')) {
-            // Find a good insertion point
-            const fileSection = Array.from(document.querySelectorAll('*')).find(el =>
-                el.textContent?.includes(sectionName) ||
-                el.textContent?.includes('Account & File') ||
-                el.textContent?.includes('계정 & 파일')
-            );
+        if (settingsContainer) {
+            // Find the h2 heading with account & files text
+            const heading = Array.from(settingsContainer.querySelectorAll('h2')).find(h2 => {
+                const text = h2.textContent?.trim() || '';
+                return text === sectionName ||
+                       text.includes('Account') ||
+                       text.includes('계정');
+            });
 
-            if (fileSection) {
-                // Insert after the section header
-                const parent = fileSection.parentElement;
-                if (parent) {
-                    parent.insertBefore(container, fileSection.nextSibling);
-                    console.log('Settings Backup v3: UI injected into Settings page');
-                    clearInterval(checkInterval);
-                    return;
+            if (heading) {
+                // Remove existing if it's detached
+                if (existing && !existing.parentElement) {
+                    existing.remove();
                 }
-            }
 
-            // Fallback: append to settings page
-            settingsPage.appendChild(container);
-            console.log('Settings Backup v3: UI injected into Settings page (fallback)');
-            clearInterval(checkInterval);
+                // Insert after the h2 heading
+                heading.insertAdjacentElement('afterend', container);
+                console.log('Settings Backup v3: UI injected after heading');
+                return;
+            }
         }
     }, 500);
-
-    // Stop checking after 30 seconds
-    setTimeout(() => {
-        clearInterval(checkInterval);
-        // If still not injected, append to body as last resort
-        if (!document.getElementById('settings-backup-v3-ui')) {
-            console.warn('Settings Backup v3: Could not find settings page, appending to body');
-            document.body.appendChild(container);
-        }
-    }, 30000);
 }
