@@ -15,6 +15,14 @@ export interface StorageHelper {
  * All functions are injected into plugin eval scope as globals
  */
 export function createStorage(): StorageHelper {
+    // Detect Tauri environment (file system, no IndexedDB)
+    const isTauri = typeof (window as any).__TAURI__ !== 'undefined' ||
+                    typeof (window as any).__TAURI_INTERNALS__ !== 'undefined';
+
+    if (isTauri) {
+        console.log('[Storage] Tauri environment detected - IndexedDB not available');
+    }
+
     // Try to get forageStorage (optional)
     let storage: any = null;
     if ((globalThis as any).forageStorage) {
@@ -65,51 +73,59 @@ export function createStorage(): StorageHelper {
                 }
             }
 
-            // Strategy 3: Manual IndexedDB access
-            try {
-                const data = await new Promise<Uint8Array | null>((resolve) => {
-                    const request = indexedDB.open("risuai");
-                    request.onsuccess = (event: any) => {
-                        const db = event.target.result;
-                        if (!db.objectStoreNames.contains("keyvaluepairs")) {
-                            db.close();
-                            resolve(null);
-                            return;
-                        }
-                        const transaction = db.transaction(["keyvaluepairs"], "readonly");
-                        const store = transaction.objectStore("keyvaluepairs");
-                        const getRequest = store.get(key);
-                        getRequest.onsuccess = () => {
-                            db.close();
-                            resolve(getRequest.result || null);
+            // Strategy 3: Manual IndexedDB access (skip for Tauri)
+            if (!isTauri) {
+                try {
+                    const data = await new Promise<Uint8Array | null>((resolve) => {
+                        const request = indexedDB.open("risuai");
+                        request.onsuccess = (event: any) => {
+                            const db = event.target.result;
+                            if (!db.objectStoreNames.contains("keyvaluepairs")) {
+                                db.close();
+                                resolve(null);
+                                return;
+                            }
+                            const transaction = db.transaction(["keyvaluepairs"], "readonly");
+                            const store = transaction.objectStore("keyvaluepairs");
+                            const getRequest = store.get(key);
+                            getRequest.onsuccess = () => {
+                                db.close();
+                                resolve(getRequest.result || null);
+                            };
+                            getRequest.onerror = () => {
+                                db.close();
+                                resolve(null);
+                            };
                         };
-                        getRequest.onerror = () => {
-                            db.close();
-                            resolve(null);
-                        };
-                    };
-                    request.onerror = () => resolve(null);
-                });
+                        request.onerror = () => resolve(null);
+                    });
 
-                if (data && data.length > 0) {
-                    console.log(`✓ Found ${key} via IndexedDB (${data.length} bytes)`);
-                    return data;
+                    if (data && data.length > 0) {
+                        console.log(`✓ Found ${key} via IndexedDB (${data.length} bytes)`);
+                        return data;
+                    }
+                } catch (error) {
+                    console.warn(`IndexedDB access failed for ${key}:`, error);
                 }
-            } catch (error) {
-                console.warn(`IndexedDB access failed for ${key}:`, error);
             }
 
-            console.warn(`Asset not found: ${key}`);
+            console.warn(`Asset not found: ${key} (not in storage or SW cache)`);
             return null;
         },
 
         /**
-         * Set item using forageStorage or manual IndexedDB
+         * Set item using forageStorage or manual IndexedDB (not available in Tauri)
          */
         setItem: async (key: string, value: Uint8Array) => {
             if (storage) {
                 await storage.setItem(key, value);
                 return;
+            }
+
+            // Tauri uses file system, not IndexedDB
+            if (isTauri) {
+                console.warn(`[Storage] Cannot setItem in Tauri (file system only): ${key}`);
+                throw new Error('Tauri import not yet supported - file system write required');
             }
 
             // Manual IndexedDB write
@@ -134,11 +150,17 @@ export function createStorage(): StorageHelper {
         },
 
         /**
-         * Get all keys from forageStorage or manual IndexedDB
+         * Get all keys from forageStorage or manual IndexedDB (not available in Tauri)
          */
         keys: async () => {
             if (storage && storage.keys) {
                 return await storage.keys();
+            }
+
+            // Tauri doesn't use IndexedDB
+            if (isTauri) {
+                console.warn('[Storage] keys() not available in Tauri');
+                return [];
             }
 
             // Manual IndexedDB keys
@@ -147,6 +169,11 @@ export function createStorage(): StorageHelper {
                     const request = indexedDB.open("risuai");
                     request.onsuccess = (event: any) => {
                         const db = event.target.result;
+                        if (!db.objectStoreNames.contains("keyvaluepairs")) {
+                            db.close();
+                            resolve([]);
+                            return;
+                        }
                         const transaction = db.transaction(["keyvaluepairs"], "readonly");
                         const store = transaction.objectStore("keyvaluepairs");
                         const getAllKeysRequest = store.getAllKeys();

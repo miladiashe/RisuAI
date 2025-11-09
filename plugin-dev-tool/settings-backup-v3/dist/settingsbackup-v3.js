@@ -2737,6 +2737,10 @@
 
   // src/storage.ts
   function createStorage() {
+    const isTauri = typeof window.__TAURI__ !== "undefined" || typeof window.__TAURI_INTERNALS__ !== "undefined";
+    if (isTauri) {
+      console.log("[Storage] Tauri environment detected - IndexedDB not available");
+    }
     let storage = null;
     if (globalThis.forageStorage) {
       storage = globalThis.forageStorage;
@@ -2777,47 +2781,53 @@
             console.warn(`forageStorage.getItem failed for ${key}:`, error);
           }
         }
-        try {
-          const data = await new Promise((resolve) => {
-            const request = indexedDB.open("risuai");
-            request.onsuccess = (event) => {
-              const db = event.target.result;
-              if (!db.objectStoreNames.contains("keyvaluepairs")) {
-                db.close();
-                resolve(null);
-                return;
-              }
-              const transaction = db.transaction(["keyvaluepairs"], "readonly");
-              const store = transaction.objectStore("keyvaluepairs");
-              const getRequest = store.get(key);
-              getRequest.onsuccess = () => {
-                db.close();
-                resolve(getRequest.result || null);
+        if (!isTauri) {
+          try {
+            const data = await new Promise((resolve) => {
+              const request = indexedDB.open("risuai");
+              request.onsuccess = (event) => {
+                const db = event.target.result;
+                if (!db.objectStoreNames.contains("keyvaluepairs")) {
+                  db.close();
+                  resolve(null);
+                  return;
+                }
+                const transaction = db.transaction(["keyvaluepairs"], "readonly");
+                const store = transaction.objectStore("keyvaluepairs");
+                const getRequest = store.get(key);
+                getRequest.onsuccess = () => {
+                  db.close();
+                  resolve(getRequest.result || null);
+                };
+                getRequest.onerror = () => {
+                  db.close();
+                  resolve(null);
+                };
               };
-              getRequest.onerror = () => {
-                db.close();
-                resolve(null);
-              };
-            };
-            request.onerror = () => resolve(null);
-          });
-          if (data && data.length > 0) {
-            console.log(`\u2713 Found ${key} via IndexedDB (${data.length} bytes)`);
-            return data;
+              request.onerror = () => resolve(null);
+            });
+            if (data && data.length > 0) {
+              console.log(`\u2713 Found ${key} via IndexedDB (${data.length} bytes)`);
+              return data;
+            }
+          } catch (error) {
+            console.warn(`IndexedDB access failed for ${key}:`, error);
           }
-        } catch (error) {
-          console.warn(`IndexedDB access failed for ${key}:`, error);
         }
-        console.warn(`Asset not found: ${key}`);
+        console.warn(`Asset not found: ${key} (not in storage or SW cache)`);
         return null;
       },
       /**
-       * Set item using forageStorage or manual IndexedDB
+       * Set item using forageStorage or manual IndexedDB (not available in Tauri)
        */
       setItem: async (key, value) => {
         if (storage) {
           await storage.setItem(key, value);
           return;
+        }
+        if (isTauri) {
+          console.warn(`[Storage] Cannot setItem in Tauri (file system only): ${key}`);
+          throw new Error("Tauri import not yet supported - file system write required");
         }
         return new Promise((resolve, reject) => {
           const request = indexedDB.open("risuai");
@@ -2839,17 +2849,26 @@
         });
       },
       /**
-       * Get all keys from forageStorage or manual IndexedDB
+       * Get all keys from forageStorage or manual IndexedDB (not available in Tauri)
        */
       keys: async () => {
         if (storage && storage.keys) {
           return await storage.keys();
+        }
+        if (isTauri) {
+          console.warn("[Storage] keys() not available in Tauri");
+          return [];
         }
         try {
           return await new Promise((resolve, reject) => {
             const request = indexedDB.open("risuai");
             request.onsuccess = (event) => {
               const db = event.target.result;
+              if (!db.objectStoreNames.contains("keyvaluepairs")) {
+                db.close();
+                resolve([]);
+                return;
+              }
               const transaction = db.transaction(["keyvaluepairs"], "readonly");
               const store = transaction.objectStore("keyvaluepairs");
               const getAllKeysRequest = store.getAllKeys();
