@@ -122,8 +122,18 @@ export async function importSettings() {
                                 storageKey = await saveAsset(assetUint8Array, assetId, `${assetId}.${ext}`);
                                 console.log(`✓ Restored (saveAsset): ${moduleId}/${assetId} → ${storageKey}`);
                             } catch (error) {
+                                // Check if Tauri before fallback
+                                const isTauri = typeof (window as any).__TAURI__ !== 'undefined' ||
+                                                typeof (window as any).__TAURI_INTERNALS__ !== 'undefined';
+
+                                console.error(`saveAsset failed for ${assetId}:`, error);
+
+                                if (isTauri) {
+                                    throw new Error(`Tauri import failed: saveAsset() not available or failed. Cannot use IndexedDB fallback in Tauri.`);
+                                }
+
                                 // Fallback to manual storage (Web only)
-                                console.warn(`saveAsset failed, trying manual storage:`, error);
+                                console.warn(`Trying manual storage fallback...`);
                                 storageKey = `assets/${assetId}.${ext}`;
                                 await storage.setItem(storageKey, assetUint8Array);
                                 console.log(`✓ Restored (manual): ${moduleId}/${assetId} → ${storageKey}`);
@@ -183,8 +193,18 @@ export async function importSettings() {
                             storageKey = await saveAsset(iconUint8Array, `persona-icon-${personaIndex}`, `persona-icon-${personaIndex}.${ext}`);
                             console.log(`✓ Restored persona icon ${personaIndex} (saveAsset): ${storageKey}`);
                         } catch (error) {
+                            // Check if Tauri before fallback
+                            const isTauri = typeof (window as any).__TAURI__ !== 'undefined' ||
+                                            typeof (window as any).__TAURI_INTERNALS__ !== 'undefined';
+
+                            console.error(`saveAsset failed for persona icon ${personaIndex}:`, error);
+
+                            if (isTauri) {
+                                throw new Error(`Tauri import failed: saveAsset() not available or failed. Cannot use IndexedDB fallback in Tauri.`);
+                            }
+
                             // Fallback to manual storage (Web only)
-                            console.warn(`saveAsset failed for persona icon, trying manual storage:`, error);
+                            console.warn(`Trying manual storage fallback...`);
                             storageKey = `persona-icon-${personaIndex}.${ext}`;
                             await storage.setItem(storageKey, iconUint8Array);
                             console.log(`✓ Restored persona icon ${personaIndex} (manual): ${storageKey}`);
