@@ -23,11 +23,12 @@
   title.textContent = "\u{1F50D} Debug Plugin";
   title.style.cssText = "margin: 0 0 10px 0; color: #0f0;";
   debugContainer.appendChild(title);
+  var buttonContainer = document.createElement("div");
+  buttonContainer.style.cssText = "display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap;";
+  debugContainer.appendChild(buttonContainer);
   var output = document.createElement("pre");
   output.style.cssText = "margin: 10px 0; white-space: pre-wrap; word-wrap: break-word;";
   debugContainer.appendChild(output);
-  var buttonContainer = document.createElement("div");
-  buttonContainer.style.cssText = "display: flex; gap: 10px; margin-bottom: 10px;";
   function createButton(text, onClick) {
     const btn = document.createElement("button");
     btn.textContent = text;

@@ -28,12 +28,13 @@ title.textContent = '🔍 Debug Plugin';
 title.style.cssText = 'margin: 0 0 10px 0; color: #0f0;';
 debugContainer.appendChild(title);
 
+const buttonContainer = document.createElement('div');
+buttonContainer.style.cssText = 'display: flex; gap: 10px; margin-bottom: 10px; flex-wrap: wrap;';
+debugContainer.appendChild(buttonContainer);
+
 const output = document.createElement('pre');
 output.style.cssText = 'margin: 10px 0; white-space: pre-wrap; word-wrap: break-word;';
 debugContainer.appendChild(output);
-
-const buttonContainer = document.createElement('div');
-buttonContainer.style.cssText = 'display: flex; gap: 10px; margin-bottom: 10px;';
 
 function createButton(text: string, onClick: () => void) {
     const btn = document.createElement('button');
