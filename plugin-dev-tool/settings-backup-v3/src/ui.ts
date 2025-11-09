@@ -2,6 +2,28 @@
  * UI helpers for loading overlays and buttons
  */
 
+// Localization data
+const i18n = {
+    en: { account: "Account", files: "Files" },
+    ko: { account: "계정", files: "파일" },
+    cn: { account: "账号", files: "文件" },
+    'zh-Hant': { account: "帳號", files: "檔案" },
+    de: { account: "Konto", files: "Daten" },
+    es: { account: "Cuenta", files: "Archivos" },
+    vi: { account: "Tài khoản", files: "Các tập tin" }
+};
+
+function getLocalizedText(key: 'account' | 'files'): string {
+    try {
+        // Try to get language from RisuAI database
+        const db = (window as any).getDatabase?.();
+        const lang = db?.language || 'en';
+        return i18n[lang as keyof typeof i18n]?.[key] || i18n.en[key];
+    } catch {
+        return i18n.en[key];
+    }
+}
+
 export function createLoadingOverlay(message: string): HTMLDivElement {
     const overlay = document.createElement('div');
     overlay.id = 'settings-backup-loading-overlay';
@@ -126,19 +148,24 @@ export function createUI(options: UIOptions) {
 function injectIntoSettingsPage(container: HTMLElement) {
     // Check periodically for settings page
     const checkInterval = setInterval(() => {
+        // Get localized section name
+        const sectionName = `${getLocalizedText('account')} & ${getLocalizedText('files')}`;
+
         // Look for settings page indicators
         const settingsPage = document.querySelector('[data-page="settings"]') ||
                             document.querySelector('.settings-page') ||
                             Array.from(document.querySelectorAll('*')).find(el =>
-                                el.textContent?.includes('계정 & 파일') ||
-                                el.textContent?.includes('Account')
+                                el.textContent?.includes(sectionName) ||
+                                el.textContent?.includes('Account') ||
+                                el.textContent?.includes('계정')
                             )?.closest('div');
 
         if (settingsPage && !document.getElementById('settings-backup-v3-ui')) {
             // Find a good insertion point
             const fileSection = Array.from(document.querySelectorAll('*')).find(el =>
-                el.textContent?.includes('계정 & 파일') ||
-                el.textContent?.includes('Account & File')
+                el.textContent?.includes(sectionName) ||
+                el.textContent?.includes('Account & File') ||
+                el.textContent?.includes('계정 & 파일')
             );
 
             if (fileSection) {
