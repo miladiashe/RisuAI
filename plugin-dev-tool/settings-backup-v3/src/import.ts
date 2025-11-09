@@ -245,8 +245,12 @@ export async function importSettings() {
             // Save to database
             updateLoadingProgress(1, 1, 'Saving to database');
 
-            // @ts-ignore - setDatabaseLite is a global function provided by RisuAI
-            setDatabaseLite(importedSettings);
+            // @ts-ignore - setDatabase is a global function provided by RisuAI
+            // Using setDatabase() instead of setDatabaseLite() for proper initialization:
+            // - Sets default values for 83+ fields (handles new features in updates)
+            // - Applies language settings
+            // - Validates data integrity
+            setDatabase(importedSettings);
 
             removeLoadingOverlay();
             console.log('ResuAI: Import successful!');
