@@ -115,8 +115,8 @@ export async function importSettings() {
                             // Read asset data
                             const assetUint8Array = await file.async('uint8array');
 
-                            // Store in IndexedDB with timestamp to make unique
-                            const storageKey = `assets/${assetId}-imported-${Date.now()}.${ext}`;
+                            // Store in IndexedDB (overwrite if exists)
+                            const storageKey = `assets/${assetId}.${ext}`;
                             await storage.setItem(storageKey, assetUint8Array);
 
                             console.log(`✓ Restored: ${moduleId}/${assetId} → ${storageKey}`);
@@ -167,7 +167,7 @@ export async function importSettings() {
                         }
 
                         const iconUint8Array = await file.async('uint8array');
-                        const storageKey = `persona-icon-${personaIndex}-imported-${Date.now()}.${ext}`;
+                        const storageKey = `persona-icon-${personaIndex}.${ext}`;
 
                         await storage.setItem(storageKey, iconUint8Array);
                         console.log(`✓ Restored persona icon ${personaIndex}: ${storageKey}`);
