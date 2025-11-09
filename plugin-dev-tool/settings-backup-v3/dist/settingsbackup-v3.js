@@ -3090,9 +3090,9 @@
                 continue;
               }
               const ext = assetExt || "png";
-              const filename = assetId.endsWith(`.${ext}`) ? assetId : `${assetId}.${ext}`;
-              moduleFolder.file(filename, base64Data, { base64: true });
-              console.log(`\u2713 [${processedAssets}/${totalAssets}] ${moduleId}/${filename}`);
+              const filename2 = assetId.endsWith(`.${ext}`) ? assetId : `${assetId}.${ext}`;
+              moduleFolder.file(filename2, base64Data, { base64: true });
+              console.log(`\u2713 [${processedAssets}/${totalAssets}] ${moduleId}/${filename2}`);
             } catch (error) {
             }
           }
@@ -3133,9 +3133,9 @@
                 console.warn(`Unknown icon format for persona ${personaInfo.index}`);
                 continue;
               }
-              const filename = `persona-${personaInfo.index}.png`;
-              personaFolder.file(filename, base64Data, { base64: true });
-              console.log(`\u2713 [${processedIcons}/${personaIcons.length}] ${filename} (${personaInfo.name})`);
+              const filename2 = `persona-${personaInfo.index}.png`;
+              personaFolder.file(filename2, base64Data, { base64: true });
+              console.log(`\u2713 [${processedIcons}/${personaIcons.length}] ${filename2} (${personaInfo.name})`);
             } catch (error) {
               console.warn(`Error processing persona icon ${personaInfo.index}:`, error);
             }
@@ -3145,14 +3145,18 @@
       }
       updateLoadingProgress(1, 1, "Generating ZIP file");
       const zipBlob = await zip.generateAsync({ type: "blob" });
+      const filename = `risuai-settings-v3-${(/* @__PURE__ */ new Date()).toISOString().split("T")[0]}.zip`;
       const url = URL.createObjectURL(zipBlob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `risuai-settings-v3-${(/* @__PURE__ */ new Date()).toISOString().split("T")[0]}.zip`;
+      a.download = filename;
+      a.style.display = "none";
       document.body.appendChild(a);
       a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 1e3);
       removeLoadingOverlay();
       console.log("Settings Backup v3: Export successful!");
       alert("\u2705 Settings exported successfully!");
