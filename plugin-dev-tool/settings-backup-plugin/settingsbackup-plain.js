@@ -9,12 +9,6 @@
 
 console.log('Settings Backup Plugin: Initializing...');
 
-// Debug: Check if functions are available
-console.log('Debug: typeof getDatabase =', typeof getDatabase);
-console.log('Debug: typeof setDatabase =', typeof setDatabase);
-console.log('Debug: typeof setDatabaseLite =', typeof setDatabaseLite);
-console.log('Debug: typeof onUnload =', typeof onUnload);
-
 // Export Settings Function
 function exportSettings() {
     console.log('Settings Backup: Exporting settings...');
@@ -23,17 +17,27 @@ function exportSettings() {
         // Get current database
         const db = getDatabase();
 
-        // Create a copy excluding characters
+        // Create a copy excluding characters and character-related data
         const settingsBackup = {
             ...db,
             characters: undefined, // Exclude characters array
+            characterOrder: undefined, // Exclude character folder structure (빈 폴더 제거)
             exportDate: new Date().toISOString(),
             exportVersion: '1.0.0',
             pluginName: 'settingsbackup'
         };
 
+        // Remove module assets (모듈 추가 에셋 제외)
+        if (settingsBackup.modules && Array.isArray(settingsBackup.modules)) {
+            settingsBackup.modules = settingsBackup.modules.map(module => {
+                const { assets, ...moduleWithoutAssets } = module;
+                return moduleWithoutAssets;
+            });
+        }
+
         // Remove undefined to clean up JSON
         delete settingsBackup.characters;
+        delete settingsBackup.characterOrder;
 
         // Convert to JSON
         const jsonString = JSON.stringify(settingsBackup, null, 2);
@@ -78,11 +82,6 @@ function importSettings() {
         }
 
         try {
-            // Debug: Check if functions are available in async context
-            console.log('Debug (async): typeof getDatabase =', typeof getDatabase);
-            console.log('Debug (async): typeof setDatabase =', typeof setDatabase);
-            console.log('Debug (async): typeof setDatabaseLite =', typeof setDatabaseLite);
-
             // Read file
             const text = await file.text();
             const importedSettings = JSON.parse(text);
@@ -109,30 +108,49 @@ function importSettings() {
             // Get current database
             const db = getDatabase();
 
-            // Preserve current characters
+            // Preserve current characters and character-related data
             const currentCharacters = db.characters;
+            const currentCharacterOrder = db.characterOrder;
+
+            // Preserve current module assets
+            const currentModules = db.modules || [];
+            const currentModuleAssets = new Map();
+            currentModules.forEach(module => {
+                if (module.assets) {
+                    currentModuleAssets.set(module.id, module.assets);
+                }
+            });
 
             // Remove export metadata
             delete importedSettings.exportDate;
             delete importedSettings.exportVersion;
             delete importedSettings.pluginName;
 
-            // Merge imported settings with current characters
+            // Restore module assets from current database
+            if (importedSettings.modules && Array.isArray(importedSettings.modules)) {
+                importedSettings.modules = importedSettings.modules.map(module => {
+                    const currentAssets = currentModuleAssets.get(module.id);
+                    if (currentAssets) {
+                        return { ...module, assets: currentAssets };
+                    }
+                    return module;
+                });
+            }
+
+            // Merge imported settings with current characters and characterOrder
             const mergedDb = {
                 ...importedSettings,
-                characters: currentCharacters
+                characters: currentCharacters,
+                characterOrder: currentCharacterOrder
             };
 
-            // Save merged database
-            // Try setDatabaseLite first (used internally by RisuAI)
+            // Save merged database using setDatabaseLite (used internally by RisuAI)
             if (typeof setDatabaseLite !== 'undefined') {
-                console.log('Using setDatabaseLite');
                 setDatabaseLite(mergedDb);
             } else if (typeof setDatabase !== 'undefined') {
-                console.log('Using setDatabase');
                 setDatabase(mergedDb);
             } else {
-                throw new Error('No database setter function available (tried setDatabaseLite and setDatabase)');
+                throw new Error('Database setter function not available');
             }
 
             console.log('Settings Backup: Import successful!');
