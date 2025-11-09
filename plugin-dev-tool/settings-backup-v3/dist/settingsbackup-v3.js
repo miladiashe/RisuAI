@@ -2855,6 +2855,24 @@
   }
 
   // src/ui.ts
+  var i18n = {
+    en: { account: "Account", files: "Files" },
+    ko: { account: "\uACC4\uC815", files: "\uD30C\uC77C" },
+    cn: { account: "\u8D26\u53F7", files: "\u6587\u4EF6" },
+    "zh-Hant": { account: "\u5E33\u865F", files: "\u6A94\u6848" },
+    de: { account: "Konto", files: "Daten" },
+    es: { account: "Cuenta", files: "Archivos" },
+    vi: { account: "T\xE0i kho\u1EA3n", files: "C\xE1c t\u1EADp tin" }
+  };
+  function getLocalizedText(key) {
+    try {
+      const db = window.getDatabase?.();
+      const lang = db?.language || "en";
+      return i18n[lang]?.[key] || i18n.en[key];
+    } catch {
+      return i18n.en[key];
+    }
+  }
   function createLoadingOverlay(message) {
     const overlay = document.createElement("div");
     overlay.id = "settings-backup-loading-overlay";
@@ -2955,12 +2973,13 @@
   }
   function injectIntoSettingsPage(container) {
     const checkInterval = setInterval(() => {
+      const sectionName = `${getLocalizedText("account")} & ${getLocalizedText("files")}`;
       const settingsPage = document.querySelector('[data-page="settings"]') || document.querySelector(".settings-page") || Array.from(document.querySelectorAll("*")).find(
-        (el) => el.textContent?.includes("\uACC4\uC815 & \uD30C\uC77C") || el.textContent?.includes("Account")
+        (el) => el.textContent?.includes(sectionName) || el.textContent?.includes("Account") || el.textContent?.includes("\uACC4\uC815")
       )?.closest("div");
       if (settingsPage && !document.getElementById("settings-backup-v3-ui")) {
         const fileSection = Array.from(document.querySelectorAll("*")).find(
-          (el) => el.textContent?.includes("\uACC4\uC815 & \uD30C\uC77C") || el.textContent?.includes("Account & File")
+          (el) => el.textContent?.includes(sectionName) || el.textContent?.includes("Account & File") || el.textContent?.includes("\uACC4\uC815 & \uD30C\uC77C")
         );
         if (fileSection) {
           const parent = fileSection.parentElement;
