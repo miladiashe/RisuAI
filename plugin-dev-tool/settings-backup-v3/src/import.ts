@@ -115,11 +115,19 @@ export async function importSettings() {
                             // Read asset data
                             const assetUint8Array = await file.async('uint8array');
 
-                            // Store in IndexedDB (overwrite if exists)
-                            const storageKey = `assets/${assetId}.${ext}`;
-                            await storage.setItem(storageKey, assetUint8Array);
-
-                            console.log(`✓ Restored: ${moduleId}/${assetId} → ${storageKey}`);
+                            // Store using saveAsset (supports all platforms: Web, Tauri, Capacitor)
+                            let storageKey: string;
+                            try {
+                                // @ts-ignore - saveAsset is a global function provided by RisuAI
+                                storageKey = await saveAsset(assetUint8Array, assetId, `${assetId}.${ext}`);
+                                console.log(`✓ Restored (saveAsset): ${moduleId}/${assetId} → ${storageKey}`);
+                            } catch (error) {
+                                // Fallback to manual storage (Web only)
+                                console.warn(`saveAsset failed, trying manual storage:`, error);
+                                storageKey = `assets/${assetId}.${ext}`;
+                                await storage.setItem(storageKey, assetUint8Array);
+                                console.log(`✓ Restored (manual): ${moduleId}/${assetId} → ${storageKey}`);
+                            }
 
                             // Collect for module
                             if (!moduleAssets[moduleId]) {
@@ -167,10 +175,20 @@ export async function importSettings() {
                         }
 
                         const iconUint8Array = await file.async('uint8array');
-                        const storageKey = `persona-icon-${personaIndex}.${ext}`;
 
-                        await storage.setItem(storageKey, iconUint8Array);
-                        console.log(`✓ Restored persona icon ${personaIndex}: ${storageKey}`);
+                        // Store using saveAsset (supports all platforms)
+                        let storageKey: string;
+                        try {
+                            // @ts-ignore - saveAsset is a global function provided by RisuAI
+                            storageKey = await saveAsset(iconUint8Array, `persona-icon-${personaIndex}`, `persona-icon-${personaIndex}.${ext}`);
+                            console.log(`✓ Restored persona icon ${personaIndex} (saveAsset): ${storageKey}`);
+                        } catch (error) {
+                            // Fallback to manual storage (Web only)
+                            console.warn(`saveAsset failed for persona icon, trying manual storage:`, error);
+                            storageKey = `persona-icon-${personaIndex}.${ext}`;
+                            await storage.setItem(storageKey, iconUint8Array);
+                            console.log(`✓ Restored persona icon ${personaIndex} (manual): ${storageKey}`);
+                        }
 
                         // Update persona icon reference
                         if (importedSettings.personas?.[personaIndex]) {

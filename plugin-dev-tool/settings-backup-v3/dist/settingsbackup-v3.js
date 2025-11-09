@@ -3429,9 +3429,16 @@ Version: ${importedSettings.exportVersion || "Unknown"}
                 const assetId = filename.substring(0, lastDotIndex);
                 const ext = filename.substring(lastDotIndex + 1);
                 const assetUint8Array = await file2.async("uint8array");
-                const storageKey = `assets/${assetId}.${ext}`;
-                await storage.setItem(storageKey, assetUint8Array);
-                console.log(`\u2713 Restored: ${moduleId}/${assetId} \u2192 ${storageKey}`);
+                let storageKey;
+                try {
+                  storageKey = await saveAsset(assetUint8Array, assetId, `${assetId}.${ext}`);
+                  console.log(`\u2713 Restored (saveAsset): ${moduleId}/${assetId} \u2192 ${storageKey}`);
+                } catch (error) {
+                  console.warn(`saveAsset failed, trying manual storage:`, error);
+                  storageKey = `assets/${assetId}.${ext}`;
+                  await storage.setItem(storageKey, assetUint8Array);
+                  console.log(`\u2713 Restored (manual): ${moduleId}/${assetId} \u2192 ${storageKey}`);
+                }
                 if (!moduleAssets[moduleId]) {
                   moduleAssets[moduleId] = [];
                 }
@@ -3466,9 +3473,16 @@ Version: ${importedSettings.exportVersion || "Unknown"}
                 continue;
               }
               const iconUint8Array = await file2.async("uint8array");
-              const storageKey = `persona-icon-${personaIndex}.${ext}`;
-              await storage.setItem(storageKey, iconUint8Array);
-              console.log(`\u2713 Restored persona icon ${personaIndex}: ${storageKey}`);
+              let storageKey;
+              try {
+                storageKey = await saveAsset(iconUint8Array, `persona-icon-${personaIndex}`, `persona-icon-${personaIndex}.${ext}`);
+                console.log(`\u2713 Restored persona icon ${personaIndex} (saveAsset): ${storageKey}`);
+              } catch (error) {
+                console.warn(`saveAsset failed for persona icon, trying manual storage:`, error);
+                storageKey = `persona-icon-${personaIndex}.${ext}`;
+                await storage.setItem(storageKey, iconUint8Array);
+                console.log(`\u2713 Restored persona icon ${personaIndex} (manual): ${storageKey}`);
+              }
               if (importedSettings.personas?.[personaIndex]) {
                 importedSettings.personas[personaIndex].icon = storageKey;
                 console.log(`Updated persona ${personaIndex} icon reference`);
