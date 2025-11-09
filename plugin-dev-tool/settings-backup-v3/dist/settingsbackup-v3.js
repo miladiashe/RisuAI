@@ -3241,7 +3241,7 @@ Version: ${importedSettings.exportVersion || "Unknown"}
                 const assetId = filename.substring(0, lastDotIndex);
                 const ext = filename.substring(lastDotIndex + 1);
                 const assetUint8Array = await file2.async("uint8array");
-                const storageKey = `assets/${assetId}-imported-${Date.now()}.${ext}`;
+                const storageKey = `assets/${assetId}.${ext}`;
                 await storage.setItem(storageKey, assetUint8Array);
                 console.log(`\u2713 Restored: ${moduleId}/${assetId} \u2192 ${storageKey}`);
                 if (!moduleAssets[moduleId]) {
@@ -3278,7 +3278,7 @@ Version: ${importedSettings.exportVersion || "Unknown"}
                 continue;
               }
               const iconUint8Array = await file2.async("uint8array");
-              const storageKey = `persona-icon-${personaIndex}-imported-${Date.now()}.${ext}`;
+              const storageKey = `persona-icon-${personaIndex}.${ext}`;
               await storage.setItem(storageKey, iconUint8Array);
               console.log(`\u2713 Restored persona icon ${personaIndex}: ${storageKey}`);
               if (importedSettings.personas?.[personaIndex]) {
