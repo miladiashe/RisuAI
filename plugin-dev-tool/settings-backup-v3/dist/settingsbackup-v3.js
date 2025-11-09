@@ -2736,33 +2736,56 @@
   var import_jszip = __toESM(require_jszip_min());
 
   // src/storage.ts
-  function getReadImage() {
-    if (globalThis.readImage) {
-      return globalThis.readImage;
+  function getFileSrcFunc() {
+    if (globalThis.getFileSrc) {
+      return globalThis.getFileSrc;
     }
-    throw new Error("readImage not available");
+    if (window.getFileSrc) {
+      return window.getFileSrc;
+    }
+    if (globalThis.__pluginApis__?.getFileSrc) {
+      return globalThis.__pluginApis__.getFileSrc;
+    }
+    return null;
+  }
+  function getForageStorage() {
+    if (globalThis.forageStorage) {
+      return globalThis.forageStorage;
+    }
+    if (globalThis.localforage) {
+      return globalThis.localforage.createInstance({ name: "risuai" });
+    }
+    throw new Error("No storage available");
   }
   function createStorage() {
-    const readImage = getReadImage();
-    const getForageStorage = () => {
-      if (globalThis.forageStorage) {
-        return globalThis.forageStorage;
-      }
-      if (globalThis.localforage) {
-        return globalThis.localforage.createInstance({ name: "risuai" });
-      }
-      throw new Error("No storage available");
-    };
+    const storage = getForageStorage();
+    const getFileSrc = getFileSrcFunc();
     return {
       /**
-       * Get item using RisuAI's readImage API
-       * Automatically handles IndexedDB, SW cache, Tauri, Capacitor
+       * Get item using getFileSrc (URL) or forageStorage fallback
+       * getFileSrc automatically handles SW cache, IndexedDB, Tauri, Capacitor
        */
       getItem: async (key) => {
+        if (getFileSrc) {
+          try {
+            const url = await getFileSrc(key);
+            if (url && url.length > 0) {
+              const response = await fetch(url);
+              if (response.ok) {
+                const arrayBuffer = await response.arrayBuffer();
+                const data = new Uint8Array(arrayBuffer);
+                console.log(`\u2713 Found ${key} via getFileSrc (${data.length} bytes)`);
+                return data;
+              }
+            }
+          } catch (error) {
+            console.warn(`getFileSrc failed for ${key}, trying forageStorage:`, error);
+          }
+        }
         try {
-          const data = await readImage(key);
+          const data = await storage.getItem(key);
           if (data && data.length > 0) {
-            console.log(`\u2713 Found ${key} (${data.length} bytes)`);
+            console.log(`\u2713 Found ${key} via forageStorage (${data.length} bytes)`);
             return data;
           }
           console.warn(`Asset not found: ${key}`);
@@ -2776,14 +2799,12 @@
        * Set item using forageStorage
        */
       setItem: async (key, value) => {
-        const storage = getForageStorage();
         await storage.setItem(key, value);
       },
       /**
        * Get all keys from forageStorage
        */
       keys: async () => {
-        const storage = getForageStorage();
         if (storage.keys) {
           return await storage.keys();
         }
