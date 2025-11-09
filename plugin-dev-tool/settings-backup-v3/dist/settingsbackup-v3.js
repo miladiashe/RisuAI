@@ -3099,8 +3099,167 @@
   }
 
   // src/import.ts
-  function importSettings() {
-    alert("Import functionality coming soon! For now, use the v2 plugin for imports.");
+  var import_jszip2 = __toESM(require_jszip_min());
+  async function importSettings() {
+    console.log("Settings Backup v3: Starting import...");
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".zip";
+    input.onchange = async (e) => {
+      const target = e.target;
+      const file = target.files?.[0];
+      if (!file) {
+        console.log("No file selected");
+        return;
+      }
+      const overlay = createLoadingOverlay("\u{1F4E5} Importing Settings");
+      try {
+        updateLoadingProgress(1, 5, "Reading ZIP file");
+        const arrayBuffer = await file.arrayBuffer();
+        const zip = await import_jszip2.default.loadAsync(arrayBuffer);
+        updateLoadingProgress(2, 5, "Reading settings.json");
+        const settingsFile = zip.file("settings.json");
+        if (!settingsFile) {
+          throw new Error("settings.json not found in ZIP file");
+        }
+        const settingsText = await settingsFile.async("text");
+        const importedSettings = JSON.parse(settingsText);
+        const confirmed = confirm(
+          `Import settings from backup?
+
+Export Date: ${importedSettings.exportDate || "Unknown"}
+Version: ${importedSettings.exportVersion || "Unknown"}
+
+\u26A0\uFE0F This will overwrite your current settings (except characters).`
+        );
+        if (!confirmed) {
+          removeLoadingOverlay();
+          console.log("Import cancelled by user");
+          return;
+        }
+        updateLoadingProgress(3, 5, "Reading current database");
+        const db = getDatabase();
+        const currentCharacters = db.characters;
+        const currentCharacterOrder = db.characterOrder;
+        updateLoadingProgress(4, 5, "Restoring module assets");
+        const moduleAssets = {};
+        const storage = createStorage();
+        const assetsFolder = zip.folder("module-assets");
+        if (assetsFolder) {
+          const assetFiles = Object.keys(zip.files).filter(
+            (name) => name.startsWith("module-assets/") && !zip.files[name].dir
+          );
+          console.log(`Found ${assetFiles.length} asset files in ZIP`);
+          let processedAssets = 0;
+          for (const assetPath of assetFiles) {
+            processedAssets++;
+            updateLoadingProgress(
+              processedAssets,
+              assetFiles.length,
+              `Restoring assets (${processedAssets}/${assetFiles.length})`
+            );
+            const file2 = zip.file(assetPath);
+            if (file2 && !file2.dir) {
+              try {
+                const pathParts = assetPath.split("/");
+                if (pathParts.length !== 3) {
+                  console.warn(`Invalid asset path: ${assetPath}`);
+                  continue;
+                }
+                const moduleId = pathParts[1];
+                const filename = pathParts[2];
+                const lastDotIndex = filename.lastIndexOf(".");
+                if (lastDotIndex === -1) {
+                  console.warn(`Invalid filename (no extension): ${filename}`);
+                  continue;
+                }
+                const assetId = filename.substring(0, lastDotIndex);
+                const ext = filename.substring(lastDotIndex + 1);
+                const assetUint8Array = await file2.async("uint8array");
+                const storageKey = `assets/${assetId}-imported-${Date.now()}.${ext}`;
+                await storage.setItem(storageKey, assetUint8Array);
+                console.log(`\u2713 Restored: ${moduleId}/${assetId} \u2192 ${storageKey}`);
+                if (!moduleAssets[moduleId]) {
+                  moduleAssets[moduleId] = [];
+                }
+                moduleAssets[moduleId].push([assetId, storageKey, ext]);
+              } catch (error) {
+                console.warn(`Error restoring asset ${assetPath}:`, error);
+              }
+            }
+          }
+          console.log(`Restored ${processedAssets} module assets`);
+        }
+        updateLoadingProgress(5, 5, "Restoring persona icons");
+        const personaIconFolder = zip.folder("persona-icons");
+        if (personaIconFolder) {
+          const iconFiles = Object.keys(zip.files).filter(
+            (name) => name.startsWith("persona-icons/") && !zip.files[name].dir
+          );
+          console.log(`Found ${iconFiles.length} persona icon files in ZIP`);
+          for (const iconPath of iconFiles) {
+            try {
+              const filename = iconPath.split("/")[1];
+              const match = filename.match(/^persona-(\d+)\.(.+)$/);
+              if (!match) {
+                console.warn(`Invalid persona icon filename: ${filename}`);
+                continue;
+              }
+              const personaIndex = parseInt(match[1], 10);
+              const ext = match[2];
+              const file2 = zip.file(iconPath);
+              if (!file2) {
+                console.warn(`Failed to read persona icon: ${iconPath}`);
+                continue;
+              }
+              const iconUint8Array = await file2.async("uint8array");
+              const storageKey = `persona-icon-${personaIndex}-imported-${Date.now()}.${ext}`;
+              await storage.setItem(storageKey, iconUint8Array);
+              console.log(`\u2713 Restored persona icon ${personaIndex}: ${storageKey}`);
+              if (importedSettings.personas?.[personaIndex]) {
+                importedSettings.personas[personaIndex].icon = storageKey;
+                console.log(`Updated persona ${personaIndex} icon reference`);
+              } else {
+                console.warn(`Persona ${personaIndex} not found in imported settings`);
+              }
+            } catch (error) {
+              console.warn(`Error restoring persona icon ${iconPath}:`, error);
+            }
+          }
+        }
+        delete importedSettings.exportDate;
+        delete importedSettings.exportVersion;
+        delete importedSettings.pluginName;
+        console.log(`Modules with assets: ${Object.keys(moduleAssets).length}`);
+        if (importedSettings.modules && Array.isArray(importedSettings.modules)) {
+          importedSettings.modules = importedSettings.modules.map((module) => {
+            const assets = moduleAssets[module.id];
+            if (assets && assets.length > 0) {
+              console.log(`Restoring ${assets.length} assets for module ${module.id}`);
+              return { ...module, assets };
+            } else {
+              console.log(`No assets found for module ${module.id}`);
+              return module;
+            }
+          });
+        }
+        importedSettings.characters = currentCharacters;
+        importedSettings.characterOrder = currentCharacterOrder;
+        updateLoadingProgress(1, 1, "Saving to database");
+        setDatabase(importedSettings);
+        removeLoadingOverlay();
+        console.log("Settings Backup v3: Import successful!");
+        alert("\u2705 Settings imported successfully! Refreshing page...");
+        setTimeout(() => {
+          location.reload();
+        }, 1e3);
+      } catch (error) {
+        removeLoadingOverlay();
+        console.error("Settings Backup v3: Import failed", error);
+        alert("\u274C Import failed: " + (error instanceof Error ? error.message : "Unknown error"));
+      }
+    };
+    input.click();
   }
 
   // src/index.ts
