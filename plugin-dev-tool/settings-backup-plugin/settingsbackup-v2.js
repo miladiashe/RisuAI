@@ -2772,18 +2772,37 @@
       if (assetsFolder) {
         for (const [moduleId, assets] of Object.entries(moduleAssets)) {
           for (let i = 0; i < assets.length; i++) {
-            const asset = assets[i];
-            const assetId = asset[0];
-            const assetData = asset[1];
-            const assetExt = asset[2] || "png";
-            let assetBlob = assetData;
-            if (typeof assetData === "string" && assetData.startsWith("data:")) {
-              const base64 = assetData.split(",")[1];
-              assetBlob = base64;
-            } else if (typeof assetData === "string") {
-              assetBlob = assetData;
+            try {
+              const asset = assets[i];
+              if (!asset || !Array.isArray(asset)) {
+                continue;
+              }
+              const assetId = asset[0];
+              const assetData = asset[1];
+              const assetExt = asset[2] || "png";
+              if (!assetData || typeof assetData !== "string" || assetData.length === 0) {
+                console.warn(`Skipping empty asset: ${moduleId}-${i}`);
+                continue;
+              }
+              let base64Data;
+              if (assetData.startsWith("data:")) {
+                const parts = assetData.split(",");
+                if (parts.length < 2) {
+                  console.warn(`Invalid data URI for asset: ${moduleId}-${i}`);
+                  continue;
+                }
+                base64Data = parts[1];
+              } else {
+                base64Data = assetData;
+              }
+              if (!/^[A-Za-z0-9+/=]+$/.test(base64Data)) {
+                console.warn(`Invalid base64 data for asset: ${moduleId}-${i}`);
+                continue;
+              }
+              assetsFolder.file(`${moduleId}-${i}.${assetExt}`, base64Data, { base64: true });
+            } catch (assetError) {
+              console.warn(`Error processing asset ${moduleId}-${i}:`, assetError);
             }
-            assetsFolder.file(`${moduleId}-${i}.${assetExt}`, assetBlob, { base64: true });
           }
         }
       }
