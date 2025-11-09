@@ -2737,13 +2737,11 @@
 
   // src/storage.ts
   function createStorage() {
-    let storage;
+    let storage = null;
     if (globalThis.forageStorage) {
       storage = globalThis.forageStorage;
     } else if (globalThis.localforage) {
       storage = globalThis.localforage.createInstance({ name: "risuai" });
-    } else {
-      throw new Error("No storage available (forageStorage/localforage not found)");
     }
     let getFileSrc = null;
     if (globalThis.getFileSrc) {
@@ -2755,7 +2753,7 @@
     }
     return {
       /**
-       * Get item using getFileSrc (URL) or forageStorage fallback
+       * Get item using getFileSrc (URL) or forageStorage or manual IndexedDB
        * getFileSrc automatically handles SW cache, IndexedDB, Tauri, Capacitor
        */
       getItem: async (key) => {
@@ -2772,36 +2770,111 @@
               }
             }
           } catch (error) {
-            console.warn(`getFileSrc failed for ${key}, trying forageStorage:`, error);
+            console.warn(`getFileSrc failed for ${key}:`, error);
+          }
+        }
+        if (storage) {
+          try {
+            const data = await storage.getItem(key);
+            if (data && data.length > 0) {
+              console.log(`\u2713 Found ${key} via forageStorage (${data.length} bytes)`);
+              return data;
+            }
+          } catch (error) {
+            console.warn(`forageStorage.getItem failed for ${key}:`, error);
           }
         }
         try {
-          const data = await storage.getItem(key);
+          const data = await new Promise((resolve) => {
+            const request = indexedDB.open("risuai");
+            request.onsuccess = (event) => {
+              const db = event.target.result;
+              if (!db.objectStoreNames.contains("keyvaluepairs")) {
+                db.close();
+                resolve(null);
+                return;
+              }
+              const transaction = db.transaction(["keyvaluepairs"], "readonly");
+              const store = transaction.objectStore("keyvaluepairs");
+              const getRequest = store.get(key);
+              getRequest.onsuccess = () => {
+                db.close();
+                resolve(getRequest.result || null);
+              };
+              getRequest.onerror = () => {
+                db.close();
+                resolve(null);
+              };
+            };
+            request.onerror = () => resolve(null);
+          });
           if (data && data.length > 0) {
-            console.log(`\u2713 Found ${key} via forageStorage (${data.length} bytes)`);
+            console.log(`\u2713 Found ${key} via IndexedDB (${data.length} bytes)`);
             return data;
           }
-          console.warn(`Asset not found: ${key}`);
-          return null;
         } catch (error) {
-          console.warn(`Failed to read ${key}:`, error);
-          return null;
+          console.warn(`IndexedDB access failed for ${key}:`, error);
         }
+        console.warn(`Asset not found: ${key}`);
+        return null;
       },
       /**
-       * Set item using forageStorage
+       * Set item using forageStorage or manual IndexedDB
        */
       setItem: async (key, value) => {
-        await storage.setItem(key, value);
+        if (storage) {
+          await storage.setItem(key, value);
+          return;
+        }
+        return new Promise((resolve, reject) => {
+          const request = indexedDB.open("risuai");
+          request.onsuccess = (event) => {
+            const db = event.target.result;
+            const transaction = db.transaction(["keyvaluepairs"], "readwrite");
+            const store = transaction.objectStore("keyvaluepairs");
+            const putRequest = store.put(value, key);
+            putRequest.onsuccess = () => {
+              db.close();
+              resolve();
+            };
+            putRequest.onerror = () => {
+              db.close();
+              reject(putRequest.error);
+            };
+          };
+          request.onerror = () => reject(request.error);
+        });
       },
       /**
-       * Get all keys from forageStorage
+       * Get all keys from forageStorage or manual IndexedDB
        */
       keys: async () => {
-        if (storage.keys) {
+        if (storage && storage.keys) {
           return await storage.keys();
         }
-        return [];
+        try {
+          return await new Promise((resolve, reject) => {
+            const request = indexedDB.open("risuai");
+            request.onsuccess = (event) => {
+              const db = event.target.result;
+              const transaction = db.transaction(["keyvaluepairs"], "readonly");
+              const store = transaction.objectStore("keyvaluepairs");
+              const getAllKeysRequest = store.getAllKeys();
+              getAllKeysRequest.onsuccess = () => {
+                db.close();
+                resolve(getAllKeysRequest.result);
+              };
+              getAllKeysRequest.onerror = () => {
+                db.close();
+                reject(getAllKeysRequest.error);
+              };
+            };
+            request.onerror = () => reject(request.error);
+          });
+        } catch (error) {
+          console.warn("Failed to get keys:", error);
+          return [];
+        }
       }
     };
   }
