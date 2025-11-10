@@ -8,6 +8,7 @@
 import { FEEDBACK_TIMEOUT, FOCUS_DELAY } from './constants';
 import {
     getPresets,
+    savePresets,
     saveCurrentTheme,
     loadThemePreset,
     deleteThemePreset,
@@ -15,6 +16,7 @@ import {
     exportThemePreset,
     importThemePreset,
     getCharacterThemeMap,
+    saveCharacterThemeMap,
     addCharacterThemeMapping,
     removeCharacterThemeMapping,
     getDefaultTheme,
@@ -267,10 +269,67 @@ export function createFloatingWindow(): HTMLElement {
                 </button>
             </div>
 
+            <!-- Import/Export Section -->
+            <div style="
+                border-top: 1px solid var(--risu-theme-darkborderc, #333);
+                border-bottom: 1px solid var(--risu-theme-darkborderc, #333);
+                padding: 12px 0;
+                margin-bottom: 20px;
+            ">
+                <div style="color: var(--risu-theme-textcolor2, #888); font-size: 0.8em; margin-bottom: 8px; text-align: center;">Import/Export</div>
+                <div style="display: grid; grid-template-columns: 1fr; gap: 10px;">
+                    <button id="import-preset-file-btn" style="
+                        padding: 10px 16px;
+                        border-radius: 6px;
+                        border: 1px solid var(--risu-theme-darkborderc, #333);
+                        background: var(--risu-theme-darkbutton, #333);
+                        color: var(--risu-theme-textcolor, #fff);
+                        cursor: pointer;
+                        font-weight: 500;
+                        font-size: 0.9em;
+                        transition: all 0.2s;
+                    " title="Import a single theme preset file">
+                        📂 Import Theme File
+                    </button>
+                </div>
+                <div style="color: var(--risu-theme-textcolor2, #888); font-size: 0.8em; margin: 12px 0 8px 0; text-align: center;">Complete Backup</div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <button id="export-all-btn" style="
+                        padding: 10px 16px;
+                        border-radius: 6px;
+                        border: 1px solid var(--risu-theme-darkborderc, #333);
+                        background: var(--risu-theme-darkbutton, #333);
+                        color: var(--risu-theme-textcolor, #fff);
+                        cursor: pointer;
+                        font-weight: 500;
+                        font-size: 0.9em;
+                        transition: all 0.2s;
+                    " title="Export all themes + character mappings">
+                        📦 Export Backup
+                    </button>
+                    <button id="import-all-btn" style="
+                        padding: 10px 16px;
+                        border-radius: 6px;
+                        border: 1px solid var(--risu-theme-darkborderc, #333);
+                        background: var(--risu-theme-darkbutton, #333);
+                        color: var(--risu-theme-textcolor, #fff);
+                        cursor: pointer;
+                        font-weight: 500;
+                        font-size: 0.9em;
+                        transition: all 0.2s;
+                    " title="Import all themes + character mappings">
+                        📥 Import Backup
+                    </button>
+                </div>
+            </div>
+
             <h4 style="color: var(--risu-theme-textcolor, #fff); margin: 20px 0 10px 0;">Saved Presets</h4>
             <div id="preset-list" style="display: flex; flex-direction: column; gap: 8px;">
                 <!-- Preset items will be added here dynamically -->
             </div>
+
+            <!-- Hidden file input for imports -->
+            <input type="file" id="import-file-input" accept=".json" style="display: none;">
 
             <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--risu-theme-darkborderc, #333);">
                 <div style="color: var(--risu-theme-textcolor2, #888); font-size: 0.85em; text-align: center;">
@@ -336,6 +395,247 @@ function setupEventListeners(): void {
         if (e.key === 'Enter') {
             saveBtn?.dispatchEvent(new Event('click'));
         }
+    });
+
+    // Import preset file button
+    const importFileBtn = container.querySelector('#import-preset-file-btn');
+    const fileInput = container.querySelector('#import-file-input') as HTMLInputElement;
+
+    importFileBtn?.addEventListener('click', () => {
+        fileInput?.click();
+    });
+
+    // File input handler
+    fileInput?.addEventListener('change', (e) => {
+        const target = e.target as HTMLInputElement;
+        const file = target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            try {
+                const json = event.target?.result as string;
+                if (importThemePreset(json)) {
+                    showModal({
+                        title: '✓ Success',
+                        content: 'Theme preset imported successfully!',
+                        buttons: [
+                            { text: 'OK', primary: true, onClick: () => {} }
+                        ]
+                    });
+                    updatePresetList();
+                } else {
+                    showModal({
+                        title: '❌ Error',
+                        content: 'Failed to import theme preset. Check console for errors.',
+                        buttons: [
+                            { text: 'OK', primary: true, onClick: () => {} }
+                        ]
+                    });
+                }
+            } catch (error: any) {
+                showModal({
+                    title: '❌ Error',
+                    content: `Failed to read file: ${error.message}`,
+                    buttons: [
+                        { text: 'OK', primary: true, onClick: () => {} }
+                    ]
+                });
+            }
+            target.value = '';
+        };
+        reader.readAsText(file);
+    });
+
+    // Export all button
+    const exportAllBtn = container.querySelector('#export-all-btn');
+    exportAllBtn?.addEventListener('click', () => {
+        const presets = getPresets();
+        const characterThemeMap = getCharacterThemeMap();
+        const defaultTheme = getDefaultTheme();
+        const autoSwitch = getAutoSwitchEnabled();
+
+        if (presets.length === 0 && Object.keys(characterThemeMap).length === 0) {
+            showModal({
+                title: '⚠️ Warning',
+                content: 'No data to export',
+                buttons: [
+                    { text: 'OK', primary: true, onClick: () => {} }
+                ]
+            });
+            return;
+        }
+
+        // Create comprehensive backup object
+        const backupData = {
+            version: '1.0',
+            exportDate: new Date().toISOString(),
+            themePresets: presets,
+            characterThemeMap: characterThemeMap,
+            defaultTheme: defaultTheme,
+            autoSwitchEnabled: autoSwitch
+        };
+
+        const json = JSON.stringify(backupData, null, 2);
+        const blob = new Blob([json], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `risu_theme_backup_${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        const charMappingCount = Object.keys(characterThemeMap).length;
+        showModal({
+            title: '✓ Success',
+            content: `Exported complete theme backup:<br>• ${presets.length} theme preset(s)<br>• ${charMappingCount} character mapping(s)<br>• Default theme: ${defaultTheme || 'none'}`,
+            buttons: [
+                { text: 'OK', primary: true, onClick: () => {} }
+            ]
+        });
+    });
+
+    // Import all button
+    const importAllBtn = container.querySelector('#import-all-btn');
+    importAllBtn?.addEventListener('click', () => {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json';
+        input.onchange = (e) => {
+            const target = e.target as HTMLInputElement;
+            const file = target.files?.[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                try {
+                    const data = JSON.parse(event.target?.result as string);
+
+                    // Check if this is the new format (with version) or old format (just array of presets)
+                    let backupData: any;
+                    let isOldFormat = false;
+
+                    if (Array.isArray(data)) {
+                        // Old format: just presets array
+                        isOldFormat = true;
+                        backupData = {
+                            themePresets: data,
+                            characterThemeMap: {},
+                            defaultTheme: '',
+                            autoSwitchEnabled: false
+                        };
+                    } else if (data.version && data.themePresets) {
+                        // New format: comprehensive backup
+                        backupData = data;
+                    } else {
+                        showModal({
+                            title: '❌ Error',
+                            content: 'Invalid file format. Expected theme backup file.',
+                            buttons: [
+                                { text: 'OK', primary: true, onClick: () => {} }
+                            ]
+                        });
+                        return;
+                    }
+
+                    const presets = backupData.themePresets || [];
+                    const characterThemeMap = backupData.characterThemeMap || {};
+                    const defaultTheme = backupData.defaultTheme || '';
+                    const autoSwitchEnabled = backupData.autoSwitchEnabled || false;
+                    const charMappingCount = Object.keys(characterThemeMap).length;
+
+                    const contentMsg = isOldFormat
+                        ? `Found ${presets.length} preset(s) (old format).<br>How would you like to import them?`
+                        : `Found complete theme backup:<br>• ${presets.length} theme preset(s)<br>• ${charMappingCount} character mapping(s)<br>• Default theme: ${defaultTheme || 'none'}<br><br>How would you like to import them?`;
+
+                    showModal({
+                        title: '📥 Import Theme Backup',
+                        content: contentMsg,
+                        buttons: [
+                            {
+                                text: 'Replace All',
+                                primary: false,
+                                onClick: () => {
+                                    savePresets(presets);
+                                    saveCharacterThemeMap(characterThemeMap);
+                                    setDefaultTheme(defaultTheme);
+                                    setAutoSwitchEnabled(autoSwitchEnabled);
+
+                                    updatePresetList();
+
+                                    showModal({
+                                        title: '✓ Success',
+                                        content: `Replaced all theme data:<br>• ${presets.length} preset(s)<br>• ${charMappingCount} character mapping(s)`,
+                                        buttons: [
+                                            { text: 'OK', primary: true, onClick: () => {} }
+                                        ]
+                                    });
+                                }
+                            },
+                            {
+                                text: 'Merge',
+                                primary: true,
+                                onClick: () => {
+                                    // Merge presets
+                                    const existing = getPresets();
+                                    const merged = [...existing];
+                                    let addedPresets = 0;
+
+                                    for (const preset of presets) {
+                                        const existingIndex = merged.findIndex(p => p.name === preset.name);
+                                        if (existingIndex >= 0) {
+                                            merged[existingIndex] = preset;
+                                        } else {
+                                            merged.push(preset);
+                                            addedPresets++;
+                                        }
+                                    }
+
+                                    savePresets(merged);
+
+                                    // Merge character theme mappings
+                                    const existingMap = getCharacterThemeMap();
+                                    const mergedMap = { ...existingMap, ...characterThemeMap };
+                                    saveCharacterThemeMap(mergedMap);
+
+                                    // Set default theme if not already set
+                                    if (defaultTheme && !getDefaultTheme()) {
+                                        setDefaultTheme(defaultTheme);
+                                    }
+
+                                    updatePresetList();
+
+                                    showModal({
+                                        title: '✓ Success',
+                                        content: `Merged theme data:<br>• ${addedPresets} new preset(s) added<br>• ${presets.length - addedPresets} preset(s) updated<br>• ${Object.keys(characterThemeMap).length} character mapping(s) added`,
+                                        buttons: [
+                                            { text: 'OK', primary: true, onClick: () => {} }
+                                        ]
+                                    });
+                                }
+                            },
+                            {
+                                text: 'Cancel',
+                                onClick: () => {}
+                            }
+                        ]
+                    });
+                } catch (error: any) {
+                    showModal({
+                        title: '❌ Error',
+                        content: `Failed to parse file: ${error.message}`,
+                        buttons: [
+                            { text: 'OK', primary: true, onClick: () => {} }
+                        ]
+                    });
+                }
+            };
+            reader.readAsText(file);
+        };
+        input.click();
     });
 
     // Dragging functionality
