@@ -4,7 +4,7 @@
   "description": "Theme Preset Manager for RisuAI",
   "main": "dist/themepreset.js",
   "scripts": {
-    "build": "node ../src/builder.ts",
+    "build": "node ../dist/builder.js",
     "dev": "npm run build -- --watch"
   },
   "keywords": [

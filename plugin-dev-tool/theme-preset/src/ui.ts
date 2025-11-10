@@ -5,6 +5,9 @@
  * You can expand this by referencing the original theme-preset-plugin-fix3.js
  */
 
+// Declare global RisuAI API functions
+declare function getChar(): { name: string } | null;
+
 import { FEEDBACK_TIMEOUT, FOCUS_DELAY } from './constants';
 import {
     getPresets,
@@ -23,7 +26,7 @@ import {
     setDefaultTheme,
     listThemePresets
 } from './storage';
-import { getAutoSwitchEnabled, setAutoSwitchEnabled } from './auto-switch';
+import { getAutoSwitchEnabled, setAutoSwitchEnabled, startAutoSwitch, stopAutoSwitch } from './auto-switch';
 import { getShortcut, setShortcut, formatShortcutDisplay } from './shortcuts';
 import type { WindowState, ModalOptions } from './types';
 
@@ -326,6 +329,96 @@ export function createFloatingWindow(): HTMLElement {
             <h4 style="color: var(--risu-theme-textcolor, #fff); margin: 20px 0 10px 0;">Saved Presets</h4>
             <div id="preset-list" style="display: flex; flex-direction: column; gap: 8px;">
                 <!-- Preset items will be added here dynamically -->
+            </div>
+
+            <!-- Character Auto-Switch Section -->
+            <div style="margin-top: 30px; padding-top: 20px; border-top: 2px solid var(--risu-theme-darkborderc, #333);">
+                <h4 style="color: var(--risu-theme-textcolor, #fff); margin: 0 0 15px 0;">⚡ Character Auto-Switch</h4>
+
+                <div style="margin-bottom: 15px;">
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; color: var(--risu-theme-textcolor, #fff);">
+                        <input type="checkbox" id="auto-switch-toggle" style="cursor: pointer;">
+                        <span>Enable automatic theme switching based on character</span>
+                    </label>
+                </div>
+
+                <div id="auto-switch-content" style="display: none;">
+                    <!-- Default Theme Display -->
+                    <div id="default-theme-container" style="display: none; margin-bottom: 15px;">
+                        <div style="color: var(--risu-theme-textcolor2, #aaa); font-size: 0.9em; margin-bottom: 5px;">
+                            Default Theme:
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: var(--risu-theme-darkbg, #1a1a1a); border-radius: 6px; border: 1px solid var(--risu-theme-darkborderc, #333);">
+                            <span id="default-theme-name" style="color: var(--risu-theme-textcolor, #fff); flex: 1;"></span>
+                            <button id="remove-default-theme-btn"
+                                style="padding: 4px 8px; background: var(--risu-theme-red, #d32f2f); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85em;"
+                                title="Remove default theme">
+                                Remove
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Current Character Display -->
+                    <div style="margin-bottom: 10px;">
+                        <div style="color: var(--risu-theme-textcolor2, #aaa); font-size: 0.9em; margin-bottom: 5px;">
+                            Current Character: <strong id="current-character-name" style="color: var(--risu-theme-textcolor, #fff);">-</strong>
+                        </div>
+                    </div>
+
+                    <!-- Character Theme Mappings List -->
+                    <div style="margin-bottom: 15px;">
+                        <div style="color: var(--risu-theme-textcolor2, #aaa); font-size: 0.9em; margin-bottom: 5px;">
+                            Character Mappings:
+                        </div>
+                        <div id="character-mapping-list"
+                            style="max-height: 200px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding: 8px; background: var(--risu-theme-darkbg, #1a1a1a); border-radius: 6px; border: 1px solid var(--risu-theme-darkborderc, #333);">
+                            <div style="color: var(--risu-theme-textcolor2, #666); font-size: 0.9em; text-align: center; padding: 10px;">
+                                No character mappings yet
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Add Mapping Form -->
+                    <div style="padding: 12px; background: var(--risu-theme-darkbg, #1a1a1a); border-radius: 6px; border: 1px solid var(--risu-theme-darkborderc, #333);">
+                        <div style="color: var(--risu-theme-textcolor, #fff); font-size: 0.9em; margin-bottom: 10px; font-weight: 500;">
+                            Add New Mapping:
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                            <div>
+                                <label style="color: var(--risu-theme-textcolor2, #aaa); font-size: 0.85em; display: block; margin-bottom: 4px;">
+                                    Character:
+                                </label>
+                                <input type="text" id="add-mapping-character" readonly
+                                    style="width: 100%; padding: 8px; background: var(--risu-theme-bg, #2a2a2a); color: var(--risu-theme-textcolor, #fff); border: 1px solid var(--risu-theme-darkborderc, #333); border-radius: 4px; box-sizing: border-box;"
+                                    placeholder="Current character will appear here">
+                            </div>
+                            <div>
+                                <label style="color: var(--risu-theme-textcolor2, #aaa); font-size: 0.85em; display: block; margin-bottom: 4px;">
+                                    Theme:
+                                </label>
+                                <select id="add-mapping-theme"
+                                    style="width: 100%; padding: 8px; background: var(--risu-theme-bg, #2a2a2a); color: var(--risu-theme-textcolor, #fff); border: 1px solid var(--risu-theme-darkborderc, #333); border-radius: 4px; cursor: pointer; box-sizing: border-box;">
+                                    <option value="">Select a theme...</option>
+                                </select>
+                            </div>
+                            <div style="display: flex; gap: 8px;">
+                                <button id="add-mapping-btn"
+                                    style="flex: 1; padding: 10px; background: var(--risu-theme-primary, #4a90e2); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500; transition: opacity 0.2s;"
+                                    onmouseover="this.style.opacity='0.8'"
+                                    onmouseout="this.style.opacity='1'">
+                                    ➕ Add Mapping
+                                </button>
+                                <button id="set-as-default-btn"
+                                    style="padding: 10px 16px; background: var(--risu-theme-green, #4caf50); color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500; transition: opacity 0.2s; white-space: nowrap;"
+                                    onmouseover="this.style.opacity='0.8'"
+                                    onmouseout="this.style.opacity='1'"
+                                    title="Set selected theme as default for unmapped characters">
+                                    Set as Default
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- Hidden file input for imports -->
@@ -638,6 +731,93 @@ function setupEventListeners(): void {
         input.click();
     });
 
+    // Auto-switch toggle
+    const autoSwitchToggle = container.querySelector('#auto-switch-toggle') as HTMLInputElement;
+    const autoSwitchContent = container.querySelector('#auto-switch-content') as HTMLElement;
+
+    if (autoSwitchToggle) {
+        // Set initial state
+        autoSwitchToggle.checked = getAutoSwitchEnabled();
+        if (autoSwitchToggle.checked) {
+            autoSwitchContent.style.display = 'block';
+            updateAutoSwitchUI();
+        }
+
+        autoSwitchToggle.addEventListener('change', () => {
+            const enabled = autoSwitchToggle.checked;
+            setAutoSwitchEnabled(enabled);
+
+            if (enabled) {
+                autoSwitchContent.style.display = 'block';
+                updateAutoSwitchUI();
+                startAutoSwitch();
+            } else {
+                autoSwitchContent.style.display = 'none';
+                stopAutoSwitch();
+            }
+        });
+    }
+
+    // Remove default theme button
+    const removeDefaultBtn = container.querySelector('#remove-default-theme-btn');
+    removeDefaultBtn?.addEventListener('click', () => {
+        setDefaultTheme('');
+        updateDefaultThemeDisplay();
+        showButtonFeedback(removeDefaultBtn as HTMLButtonElement, '✓ Removed!');
+    });
+
+    // Add mapping button
+    const addMappingBtn = container.querySelector('#add-mapping-btn');
+    const mappingCharInput = container.querySelector('#add-mapping-character') as HTMLInputElement;
+    const mappingThemeSelect = container.querySelector('#add-mapping-theme') as HTMLSelectElement;
+
+    addMappingBtn?.addEventListener('click', () => {
+        const character = mappingCharInput?.value.trim();
+        const themeName = mappingThemeSelect?.value;
+
+        if (!character) {
+            showModal({
+                title: '⚠️ Error',
+                content: 'No character selected. Please select a character first.',
+                buttons: [{ text: 'OK', primary: true }]
+            });
+            return;
+        }
+
+        if (!themeName) {
+            showModal({
+                title: '⚠️ Error',
+                content: 'Please select a theme to map to this character.',
+                buttons: [{ text: 'OK', primary: true }]
+            });
+            return;
+        }
+
+        addCharacterThemeMapping(character, themeName);
+        updateCharacterMappingList();
+        updateThemeSelectDropdown();
+        showButtonFeedback(addMappingBtn as HTMLButtonElement, '✓ Added!');
+    });
+
+    // Set as default button
+    const setDefaultBtn = container.querySelector('#set-as-default-btn');
+    setDefaultBtn?.addEventListener('click', () => {
+        const themeName = mappingThemeSelect?.value;
+
+        if (!themeName) {
+            showModal({
+                title: '⚠️ Error',
+                content: 'Please select a theme to set as default.',
+                buttons: [{ text: 'OK', primary: true }]
+            });
+            return;
+        }
+
+        setDefaultTheme(themeName);
+        updateDefaultThemeDisplay();
+        showButtonFeedback(setDefaultBtn as HTMLButtonElement, '✓ Set as Default!');
+    });
+
     // Dragging functionality
     const header = container.querySelector('#preset-window-header') as HTMLElement;
     let isDragging = false;
@@ -914,6 +1094,142 @@ export function toggleFloatingWindow(): void {
     if (!isVisible) {
         updatePresetList();
     }
+}
+
+/**
+ * Update the character mapping list display
+ */
+function updateCharacterMappingList(): void {
+    const listContainer = windowState.window?.querySelector('#character-mapping-list');
+    if (!listContainer) return;
+
+    const characterThemeMap = getCharacterThemeMap();
+    const entries = Object.entries(characterThemeMap);
+
+    if (entries.length === 0) {
+        listContainer.innerHTML = `
+            <div style="color: var(--risu-theme-textcolor2, #666); font-size: 0.9em; text-align: center; padding: 10px;">
+                No character mappings yet
+            </div>
+        `;
+        return;
+    }
+
+    listContainer.innerHTML = '';
+    entries.forEach(([character, themeName]) => {
+        const item = document.createElement('div');
+        item.style.cssText = `
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 10px;
+            background: var(--risu-theme-bg, #2a2a2a);
+            border-radius: 4px;
+            border: 1px solid var(--risu-theme-darkborderc, #333);
+        `;
+
+        item.innerHTML = `
+            <div style="flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+                <div style="color: var(--risu-theme-textcolor, #fff); font-size: 0.85em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                    ${escapeHtml(character)}
+                </div>
+                <div style="color: var(--risu-theme-textcolor2, #888); font-size: 0.75em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                    → ${escapeHtml(themeName)}
+                </div>
+            </div>
+            <button class="remove-mapping-btn" data-character="${escapeHtml(character)}"
+                style="padding: 4px 8px; background: var(--risu-theme-red, #d32f2f); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.75em; white-space: nowrap;"
+                title="Remove mapping">
+                Remove
+            </button>
+        `;
+
+        // Add remove handler
+        const removeBtn = item.querySelector('.remove-mapping-btn');
+        removeBtn?.addEventListener('click', () => {
+            removeCharacterThemeMapping(character);
+            updateCharacterMappingList();
+            updateThemeSelectDropdown();
+            showButtonFeedback(removeBtn as HTMLButtonElement, '✓');
+        });
+
+        listContainer.appendChild(item);
+    });
+}
+
+/**
+ * Update current character name display
+ */
+function updateCurrentCharacterName(): void {
+    const charNameElement = windowState.window?.querySelector('#current-character-name');
+    const charInput = windowState.window?.querySelector('#add-mapping-character') as HTMLInputElement;
+
+    if (!charNameElement || !charInput) return;
+
+    try {
+        const char = getChar();
+        const charName = char?.name || '-';
+
+        charNameElement.textContent = charName;
+        charInput.value = charName === '-' ? '' : charName;
+    } catch (error) {
+        charNameElement.textContent = '-';
+        charInput.value = '';
+    }
+}
+
+/**
+ * Update default theme display
+ */
+function updateDefaultThemeDisplay(): void {
+    const defaultContainer = windowState.window?.querySelector('#default-theme-container') as HTMLElement;
+    const defaultNameElement = windowState.window?.querySelector('#default-theme-name');
+
+    if (!defaultContainer || !defaultNameElement) return;
+
+    const defaultTheme = getDefaultTheme();
+
+    if (defaultTheme) {
+        defaultContainer.style.display = 'block';
+        defaultNameElement.textContent = defaultTheme;
+    } else {
+        defaultContainer.style.display = 'none';
+    }
+}
+
+/**
+ * Update theme select dropdown options
+ */
+function updateThemeSelectDropdown(): void {
+    const themeSelect = windowState.window?.querySelector('#add-mapping-theme') as HTMLSelectElement;
+    if (!themeSelect) return;
+
+    const presets = getPresets();
+    const currentValue = themeSelect.value;
+
+    themeSelect.innerHTML = '<option value="">Select a theme...</option>';
+
+    presets.forEach(preset => {
+        const option = document.createElement('option');
+        option.value = preset.name;
+        option.textContent = preset.name;
+        themeSelect.appendChild(option);
+    });
+
+    // Restore selection if still valid
+    if (currentValue && presets.some(p => p.name === currentValue)) {
+        themeSelect.value = currentValue;
+    }
+}
+
+/**
+ * Update all auto-switch UI elements
+ */
+function updateAutoSwitchUI(): void {
+    updateCurrentCharacterName();
+    updateDefaultThemeDisplay();
+    updateCharacterMappingList();
+    updateThemeSelectDropdown();
 }
 
 /**

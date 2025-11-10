@@ -2,6 +2,9 @@
  * Automatic theme switching based on current character
  */
 
+// Declare global RisuAI API functions
+declare function getChar(): { name: string } | null;
+
 import { PLUGIN_NAME, CHAR_POLL_INTERVAL } from './constants';
 import { getCharacterThemeMap, getDefaultTheme } from './storage';
 import { loadThemePreset } from './storage';
