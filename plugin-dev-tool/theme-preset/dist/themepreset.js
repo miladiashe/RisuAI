@@ -317,6 +317,38 @@
     console.log(`Theme preset "${presetName}" loaded and applied successfully!`);
     return true;
   }
+  function renameThemePreset(oldName, newName) {
+    const presets = getPresets();
+    const preset = presets.find((p) => p.name === oldName);
+    if (!preset) {
+      console.error(`Theme preset "${oldName}" not found`);
+      return false;
+    }
+    const conflict = presets.find((p) => p.name === newName && p.name !== oldName);
+    if (conflict) {
+      console.error(`Theme preset "${newName}" already exists`);
+      return false;
+    }
+    preset.name = newName;
+    preset.timestamp = Date.now();
+    savePresets(presets);
+    const map = getCharacterThemeMap();
+    let updated = false;
+    for (const [charName, themeName] of Object.entries(map)) {
+      if (themeName === oldName) {
+        map[charName] = newName;
+        updated = true;
+      }
+    }
+    if (updated) {
+      saveCharacterThemeMap(map);
+    }
+    if (getDefaultTheme() === oldName) {
+      setDefaultTheme(newName);
+    }
+    console.log(`Theme preset renamed: "${oldName}" \u2192 "${newName}"`);
+    return true;
+  }
   function deleteThemePreset(presetName) {
     const presets = getPresets();
     const filtered = presets.filter((p) => p.name !== presetName);
@@ -327,6 +359,29 @@
     savePresets(filtered);
     console.log(`Theme preset "${presetName}" deleted successfully`);
     return true;
+  }
+  function listThemePresets() {
+    const presets = getPresets();
+    return presets.map((p) => ({
+      name: p.name,
+      timestamp: p.timestamp,
+      hasCSS: !!p.customCSS,
+      hasHTML: !!p.guiHTML,
+      theme: p.theme,
+      colorSchemeName: p.colorSchemeName,
+      textTheme: p.textTheme,
+      hasCustomColors: !!p.colorScheme,
+      hasCustomTextTheme: !!p.customTextTheme
+    }));
+  }
+  function exportThemePreset(presetName) {
+    const presets = getPresets();
+    const preset = presets.find((p) => p.name === presetName);
+    if (!preset) {
+      console.error(`Theme preset "${presetName}" not found`);
+      return null;
+    }
+    return JSON.stringify(preset, null, 2);
   }
   function getCharacterThemeMap() {
     const mapJson = getArg(`${PLUGIN_NAME}::characterThemeMap`);
@@ -340,8 +395,14 @@
       return {};
     }
   }
+  function saveCharacterThemeMap(map) {
+    setArg(`${PLUGIN_NAME}::characterThemeMap`, JSON.stringify(map));
+  }
   function getDefaultTheme() {
     return getArg(`${PLUGIN_NAME}::defaultTheme`) || "";
+  }
+  function setDefaultTheme(themeName) {
+    setArg(`${PLUGIN_NAME}::defaultTheme`, themeName);
   }
 
   // src/auto-switch.ts
@@ -683,12 +744,14 @@
     const listContainer = windowState.window?.querySelector("#preset-list");
     if (!listContainer)
       return;
-    const presets = getPresets();
+    const presets = listThemePresets();
     listContainer.innerHTML = "";
     if (presets.length === 0) {
       listContainer.innerHTML = `
-            <div style="color: var(--risu-theme-textcolor2, #888); text-align: center; padding: 20px;">
-                No presets saved yet. Save your first preset above!
+            <div style="text-align: center; padding: 40px 20px;">
+                <div style="font-size: 3em; margin-bottom: 10px; opacity: 0.3;">\u{1F4E6}</div>
+                <p style="color: var(--risu-theme-textcolor2, #888); margin: 0;">No presets saved yet</p>
+                <p style="color: var(--risu-theme-textcolor2, #888); font-size: 0.85em; margin-top: 5px;">Create your first theme preset!</p>
             </div>
         `;
       return;
@@ -697,57 +760,177 @@
       const item = document.createElement("div");
       item.style.cssText = `
             display: flex;
-            justify-content: space-between;
             align-items: center;
-            padding: 12px;
+            gap: 10px;
+            padding: 12px 14px;
             background: var(--risu-theme-bgcolor, #2a2a2a);
-            border: 1px solid var(--risu-theme-darkborderc, #333);
-            border-radius: 6px;
-            transition: all 0.2s;
+            border-radius: 8px;
+            border: 2px solid var(--risu-theme-darkborderc, #333);
+            transition: border-color 0.2s, box-shadow 0.2s;
+            margin-bottom: 8px;
         `;
+      const date = new Date(preset.timestamp).toLocaleDateString();
+      const detailsText = [
+        date,
+        preset.theme || "custom",
+        preset.hasCustomColors ? "\u{1F3A8} Custom Colors" : null,
+        preset.hasCustomTextTheme ? "\u{1F4DD} Text Theme" : null
+      ].filter(Boolean).join(" \u2022 ");
       item.innerHTML = `
-            <div style="flex: 1;">
-                <div style="color: var(--risu-theme-textcolor, #fff); font-weight: 500;">${escapeHtml(preset.name)}</div>
-                <div style="color: var(--risu-theme-textcolor2, #888); font-size: 0.85em;">
-                    ${new Date(preset.timestamp).toLocaleDateString()}
+            <div style="flex: 1; min-width: 0;">
+                <div style="color: var(--risu-theme-textcolor, #fff); font-weight: 500; font-size: 0.95em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                    ${escapeHtml(preset.name)}
+                </div>
+                <div style="color: var(--risu-theme-textcolor2, #888); font-size: 0.8em; margin-top: 2px;">
+                    ${detailsText}
                 </div>
             </div>
-            <div style="display: flex; gap: 6px;">
-                <button class="load-btn" data-name="${escapeHtml(preset.name)}" style="
-                    padding: 6px 12px;
-                    border-radius: 4px;
-                    border: none;
-                    background: var(--risu-theme-selected, #4a9eff);
-                    color: var(--risu-theme-textcolor, #fff);
-                    cursor: pointer;
-                    font-size: 0.85em;
-                    transition: all 0.2s;
-                ">Load</button>
-                <button class="delete-btn" data-name="${escapeHtml(preset.name)}" style="
-                    padding: 6px 12px;
-                    border-radius: 4px;
-                    border: none;
-                    background: var(--risu-theme-darkbutton, #444);
-                    color: var(--risu-theme-textcolor, #fff);
-                    cursor: pointer;
-                    font-size: 0.85em;
-                    transition: all 0.2s;
-                ">Delete</button>
-            </div>
+            <button class="load-btn" data-name="${escapeHtml(preset.name)}"
+                    style="padding: 6px 12px; border-radius: 5px; border: none; background: var(--risu-theme-selected, #4a9eff); color: var(--risu-theme-textcolor, #fff); cursor: pointer; font-size: 0.85em; font-weight: 500; white-space: nowrap; transition: all 0.2s;"
+                    title="Load theme">
+                \u{1F4E5} Load
+            </button>
+            <button class="rename-btn" data-name="${escapeHtml(preset.name)}"
+                    style="padding: 6px 10px; border-radius: 5px; border: none; background: var(--risu-theme-darkbutton, #444); color: var(--risu-theme-textcolor, #fff); cursor: pointer; font-size: 0.85em; transition: all 0.2s;"
+                    title="Rename theme">
+                \u270F\uFE0F
+            </button>
+            <button class="export-btn" data-name="${escapeHtml(preset.name)}"
+                    style="padding: 6px 10px; border-radius: 5px; border: none; background: var(--risu-theme-darkbutton, #444); color: var(--risu-theme-textcolor, #fff); cursor: pointer; font-size: 0.85em; transition: all 0.2s;"
+                    title="Export theme to file">
+                \u{1F4BE}
+            </button>
+            <button class="delete-btn" data-name="${escapeHtml(preset.name)}"
+                    style="padding: 6px 10px; border-radius: 5px; border: none; background: var(--risu-theme-draculared, #ff5555); color: var(--risu-theme-textcolor, #fff); cursor: pointer; font-size: 0.85em; transition: all 0.2s;"
+                    title="Delete theme">
+                \u{1F5D1}\uFE0F
+            </button>
         `;
+      item.addEventListener("mouseover", () => {
+        item.style.borderColor = "var(--risu-theme-selected, #4a9eff)";
+        item.style.boxShadow = "0 2px 8px rgba(74, 158, 255, 0.2)";
+      });
+      item.addEventListener("mouseout", () => {
+        item.style.borderColor = "var(--risu-theme-darkborderc, #333)";
+        item.style.boxShadow = "none";
+      });
+      const buttons = item.querySelectorAll("button");
+      buttons.forEach((btn) => {
+        btn.addEventListener("mouseover", () => {
+          if (btn.classList.contains("load-btn")) {
+            btn.style.transform = "scale(1.05)";
+          } else if (btn.classList.contains("rename-btn") || btn.classList.contains("export-btn")) {
+            btn.style.background = "var(--risu-theme-selected, #555)";
+            btn.style.transform = "scale(1.05)";
+          } else if (btn.classList.contains("delete-btn")) {
+            btn.style.background = "#ff3333";
+            btn.style.transform = "scale(1.05)";
+          }
+        });
+        btn.addEventListener("mouseout", () => {
+          btn.style.transform = "";
+          if (btn.classList.contains("rename-btn") || btn.classList.contains("export-btn")) {
+            btn.style.background = "var(--risu-theme-darkbutton, #444)";
+          } else if (btn.classList.contains("delete-btn")) {
+            btn.style.background = "var(--risu-theme-draculared, #ff5555)";
+          }
+        });
+      });
       const loadBtn = item.querySelector(".load-btn");
       loadBtn?.addEventListener("click", () => {
         loadThemePreset(preset.name);
         showButtonFeedback(loadBtn, "\u2713 Loaded!");
       });
-      const deleteBtn = item.querySelector(".delete-btn");
-      deleteBtn?.addEventListener("click", () => {
+      const renameBtn = item.querySelector(".rename-btn");
+      renameBtn?.addEventListener("click", () => {
         showModal({
-          title: "\u{1F5D1}\uFE0F Delete Preset",
-          content: `Are you sure you want to delete "${preset.name}"?`,
+          title: "\u270F\uFE0F Rename Theme Preset",
+          content: `Enter a new name for "<strong>${escapeHtml(preset.name)}</strong>":`,
+          input: {
+            value: preset.name,
+            placeholder: "New theme name"
+          },
           buttons: [
             {
               text: "Cancel",
+              primary: false,
+              onClick: () => {
+              }
+            },
+            {
+              text: "Rename",
+              primary: true,
+              onClick: (newName) => {
+                if (!newName || newName.trim() === "") {
+                  showModal({
+                    title: "\u26A0\uFE0F Warning",
+                    content: "Please enter a valid name",
+                    buttons: [{ text: "OK", primary: true, onClick: () => {
+                    } }]
+                  });
+                  return;
+                }
+                newName = newName.trim();
+                if (newName === preset.name) {
+                  return;
+                }
+                const allPresets = getPresets();
+                const conflict = allPresets.find((p) => p.name === newName);
+                if (conflict) {
+                  showModal({
+                    title: "\u274C Name Conflict",
+                    content: `A theme preset named "<strong>${escapeHtml(newName)}</strong>" already exists.<br><br>Please choose a different name.`,
+                    buttons: [{ text: "OK", primary: true, onClick: () => {
+                    } }]
+                  });
+                  return;
+                }
+                if (renameThemePreset(preset.name, newName)) {
+                  updatePresetList();
+                  showModal({
+                    title: "\u2713 Success",
+                    content: `Theme renamed: "<strong>${escapeHtml(preset.name)}</strong>" \u2192 "<strong>${escapeHtml(newName)}</strong>"`,
+                    buttons: [{ text: "OK", primary: true, onClick: () => {
+                    } }]
+                  });
+                } else {
+                  showModal({
+                    title: "\u274C Error",
+                    content: "Failed to rename theme preset",
+                    buttons: [{ text: "OK", primary: true, onClick: () => {
+                    } }]
+                  });
+                }
+              }
+            }
+          ]
+        });
+      });
+      const exportBtn = item.querySelector(".export-btn");
+      exportBtn?.addEventListener("click", () => {
+        const json = exportThemePreset(preset.name);
+        if (json) {
+          const blob = new Blob([json], { type: "application/json" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `${preset.name.replace(/[^a-zA-Z0-9-_]/g, "_")}_theme_preset.json`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          showButtonFeedback(exportBtn, "\u2713", "\u{1F4BE}");
+        }
+      });
+      const deleteBtn = item.querySelector(".delete-btn");
+      deleteBtn?.addEventListener("click", () => {
+        showModal({
+          title: "\u{1F5D1}\uFE0F Delete Theme Preset",
+          content: `Delete theme preset "<strong>${escapeHtml(preset.name)}</strong>"?<br><br>This action cannot be undone.`,
+          buttons: [
+            {
+              text: "Cancel",
+              primary: false,
               onClick: () => {
               }
             },
