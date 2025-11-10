@@ -1,5 +1,5 @@
 //@name settingsbackup-v3
-//@display-name ResuAI
+//@display-name ResuAI 1.1
 
 "use strict";
 (() => {
