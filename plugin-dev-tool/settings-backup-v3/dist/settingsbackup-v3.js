@@ -3218,6 +3218,49 @@
           console.log(`Completed processing ${processedIcons} persona icons`);
         }
       }
+      if (db.customBackground && db.customBackground.startsWith("assets/")) {
+        console.log(`Processing custom background: ${db.customBackground}`);
+        updateLoadingProgress(1, 1, "Processing custom background");
+        const customBgFolder = zip.folder("custom-background");
+        if (customBgFolder) {
+          const storage = createStorage();
+          try {
+            const bgData = await storage.getItem(db.customBackground);
+            if (!bgData) {
+              console.warn(`\u274C Custom background not found: ${db.customBackground}`);
+            } else {
+              let base64Data;
+              if (bgData instanceof Uint8Array || bgData instanceof ArrayBuffer) {
+                const uint8Array = bgData instanceof ArrayBuffer ? new Uint8Array(bgData) : bgData;
+                const binaryString = Array.from(uint8Array).map((byte) => String.fromCharCode(byte)).join("");
+                base64Data = btoa(binaryString);
+              } else if (typeof bgData === "string") {
+                if (bgData.startsWith("data:")) {
+                  const parts = bgData.split(",");
+                  if (parts.length < 2) {
+                    console.warn(`Invalid data URL for custom background`);
+                  } else {
+                    base64Data = parts[1];
+                  }
+                } else {
+                  base64Data = bgData;
+                }
+              } else {
+                console.warn(`Unknown data format for custom background`);
+              }
+              if (base64Data) {
+                const pathParts = db.customBackground.split(".");
+                const ext = pathParts.length > 1 ? pathParts[pathParts.length - 1] : "png";
+                const filename2 = `background.${ext}`;
+                customBgFolder.file(filename2, base64Data, { base64: true });
+                console.log(`\u2713 Custom background backed up: ${filename2}`);
+              }
+            }
+          } catch (error) {
+            console.warn(`Error processing custom background:`, error);
+          }
+        }
+      }
       updateLoadingProgress(1, 1, "Generating ZIP file");
       const zipBlob = await zip.generateAsync({ type: "blob" });
       const filename = `risuai-settings-v3-${(/* @__PURE__ */ new Date()).toISOString().split("T")[0]}.zip`;
@@ -3540,6 +3583,43 @@ Version: ${importedSettings.exportVersion || "Unknown"}
             }
           }
         }
+        const customBgFolder = zip.folder("custom-background");
+        if (customBgFolder) {
+          const bgFiles = Object.keys(zip.files).filter(
+            (name) => name.startsWith("custom-background/") && !zip.files[name].dir
+          );
+          if (bgFiles.length > 0) {
+            console.log(`Found custom background in ZIP`);
+            updateLoadingProgress(1, 1, "Restoring custom background");
+            try {
+              const bgPath = bgFiles[0];
+              const file2 = zip.file(bgPath);
+              if (file2) {
+                const filename = bgPath.split("/")[1];
+                const ext = filename.split(".").pop() || "png";
+                const bgUint8Array = await file2.async("uint8array");
+                let storageKey;
+                try {
+                  storageKey = await saveAsset(bgUint8Array, `custom-background`, `custom-background.${ext}`);
+                  console.log(`\u2713 Restored custom background (saveAsset): ${storageKey}`);
+                } catch (error) {
+                  console.error(`saveAsset failed for custom background:`, error);
+                  if (isTauriEnvironment()) {
+                    throw new Error(`Tauri import failed: saveAsset() not available or failed. Cannot use IndexedDB fallback in Tauri.`);
+                  }
+                  console.warn(`Trying manual storage fallback...`);
+                  storageKey = `assets/custom-background.${ext}`;
+                  await storage.setItem(storageKey, bgUint8Array);
+                  console.log(`\u2713 Restored custom background (manual): ${storageKey}`);
+                }
+                importedSettings.customBackground = storageKey;
+                console.log(`Updated customBackground reference: ${storageKey}`);
+              }
+            } catch (error) {
+              console.warn(`Error restoring custom background:`, error);
+            }
+          }
+        }
         delete importedSettings.exportDate;
         delete importedSettings.exportVersion;
         delete importedSettings.pluginName;
@@ -3559,7 +3639,7 @@ Version: ${importedSettings.exportVersion || "Unknown"}
         importedSettings.characters = currentCharacters;
         importedSettings.characterOrder = currentCharacterOrder;
         updateLoadingProgress(1, 1, "Saving to database");
-        setDatabaseLite(importedSettings);
+        setDatabase(importedSettings);
         removeLoadingOverlay();
         console.log("ResuAI: Import successful!");
         alert(
