@@ -425,8 +425,17 @@ export function createFloatingWindow(): HTMLElement {
             <input type="file" id="import-file-input" accept=".json" style="display: none;">
 
             <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--risu-theme-darkborderc, #333);">
-                <div style="color: var(--risu-theme-textcolor2, #888); font-size: 0.85em; text-align: center;">
-                    Press ${formatShortcutDisplay(getShortcut())} to toggle this window
+                <div style="display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap;">
+                    <div style="color: var(--risu-theme-textcolor2, #888); font-size: 0.85em;">
+                        Press <strong id="shortcut-display" style="color: var(--risu-theme-textcolor, #fff);">${formatShortcutDisplay(getShortcut())}</strong> to toggle this window
+                    </div>
+                    <button id="change-shortcut-btn"
+                        style="padding: 4px 10px; background: var(--risu-theme-darkbutton, #444); color: var(--risu-theme-textcolor, #fff); border: none; border-radius: 4px; cursor: pointer; font-size: 0.8em; transition: opacity 0.2s;"
+                        onmouseover="this.style.opacity='0.8'"
+                        onmouseout="this.style.opacity='1'"
+                        title="Change keyboard shortcut">
+                        ⌨️ Change
+                    </button>
                 </div>
             </div>
         </div>
@@ -816,6 +825,110 @@ function setupEventListeners(): void {
         setDefaultTheme(themeName);
         updateDefaultThemeDisplay();
         showButtonFeedback(setDefaultBtn as HTMLButtonElement, '✓ Set as Default!');
+    });
+
+    // Change shortcut button
+    const changeShortcutBtn = container.querySelector('#change-shortcut-btn');
+    changeShortcutBtn?.addEventListener('click', () => {
+        const currentShortcut = getShortcut();
+
+        showModal({
+            title: '⌨️ Change Keyboard Shortcut',
+            content: `
+                <div style="margin-bottom: 15px;">
+                    <div style="margin-bottom: 10px; color: var(--risu-theme-textcolor2, #aaa);">
+                        Current shortcut: <strong style="color: var(--risu-theme-textcolor, #fff);">${formatShortcutDisplay(currentShortcut)}</strong>
+                    </div>
+                    <div style="margin-bottom: 10px; color: var(--risu-theme-textcolor2, #aaa); font-size: 0.9em;">
+                        Enter a new keyboard shortcut:
+                    </div>
+                    <div style="padding: 10px; background: var(--risu-theme-darkbg, #1a1a1a); border-radius: 6px; border: 1px solid var(--risu-theme-darkborderc, #333); margin-bottom: 10px;">
+                        <div style="font-size: 0.85em; color: var(--risu-theme-textcolor2, #888); margin-bottom: 8px;">
+                            Examples:
+                        </div>
+                        <div style="font-size: 0.85em; color: var(--risu-theme-textcolor2, #aaa); line-height: 1.6;">
+                            • <code style="background: var(--risu-theme-bg, #2a2a2a); padding: 2px 6px; border-radius: 3px;">ctrl+shift+p</code><br>
+                            • <code style="background: var(--risu-theme-bg, #2a2a2a); padding: 2px 6px; border-radius: 3px;">alt+t</code><br>
+                            • <code style="background: var(--risu-theme-bg, #2a2a2a); padding: 2px 6px; border-radius: 3px;">ctrl+alt+shift+z</code>
+                        </div>
+                    </div>
+                </div>
+            `,
+            input: {
+                value: currentShortcut,
+                placeholder: 'e.g., ctrl+shift+p'
+            },
+            buttons: [
+                {
+                    text: 'Cancel',
+                    onClick: () => {}
+                },
+                {
+                    text: 'Save',
+                    primary: true,
+                    onClick: (inputValue?: string) => {
+                        const newShortcut = inputValue?.trim().toLowerCase();
+
+                        if (!newShortcut) {
+                            showModal({
+                                title: '⚠️ Error',
+                                content: 'Please enter a keyboard shortcut.',
+                                buttons: [{ text: 'OK', primary: true }]
+                            });
+                            return;
+                        }
+
+                        // Validate shortcut format
+                        const validKeys = ['ctrl', 'alt', 'shift', 'meta'];
+                        const parts = newShortcut.split('+').map(p => p.trim());
+
+                        if (parts.length < 2) {
+                            showModal({
+                                title: '⚠️ Invalid Shortcut',
+                                content: 'Shortcut must include at least one modifier key (ctrl, alt, shift) and one regular key.<br><br>Example: <code>ctrl+shift+p</code>',
+                                buttons: [{ text: 'OK', primary: true }]
+                            });
+                            return;
+                        }
+
+                        const lastKey = parts[parts.length - 1];
+                        const modifiers = parts.slice(0, -1);
+
+                        // Check if at least one modifier is present
+                        const hasModifier = modifiers.some(mod => validKeys.includes(mod));
+                        if (!hasModifier) {
+                            showModal({
+                                title: '⚠️ Invalid Shortcut',
+                                content: 'Shortcut must include at least one modifier key (ctrl, alt, shift).<br><br>Example: <code>ctrl+p</code>',
+                                buttons: [{ text: 'OK', primary: true }]
+                            });
+                            return;
+                        }
+
+                        // Check for invalid modifiers
+                        const invalidModifiers = modifiers.filter(mod => !validKeys.includes(mod));
+                        if (invalidModifiers.length > 0) {
+                            showModal({
+                                title: '⚠️ Invalid Shortcut',
+                                content: `Invalid modifier key(s): <strong>${invalidModifiers.join(', ')}</strong><br><br>Valid modifiers: ctrl, alt, shift, meta`,
+                                buttons: [{ text: 'OK', primary: true }]
+                            });
+                            return;
+                        }
+
+                        // Save the new shortcut
+                        setShortcut(newShortcut);
+                        updateShortcutDisplay();
+
+                        showModal({
+                            title: '✓ Success',
+                            content: `Keyboard shortcut changed to: <strong>${formatShortcutDisplay(newShortcut)}</strong>`,
+                            buttons: [{ text: 'OK', primary: true }]
+                        });
+                    }
+                }
+            ]
+        });
     });
 
     // Dragging functionality
@@ -1230,6 +1343,16 @@ function updateAutoSwitchUI(): void {
     updateDefaultThemeDisplay();
     updateCharacterMappingList();
     updateThemeSelectDropdown();
+}
+
+/**
+ * Update shortcut display in the UI
+ */
+function updateShortcutDisplay(): void {
+    const shortcutDisplayElement = windowState.window?.querySelector('#shortcut-display');
+    if (!shortcutDisplayElement) return;
+
+    shortcutDisplayElement.textContent = formatShortcutDisplay(getShortcut());
 }
 
 /**
