@@ -116,11 +116,16 @@ export function loadThemePreset(presetName: string): boolean {
     }
 
     const db = getDatabase();
+
+    console.log(`🔍 Before load - colorSchemeName in DB: "${db.colorSchemeName}"`);
+
     db.customCSS = preset.customCSS || '';
     db.guiHTML = preset.guiHTML || '';
     db.theme = preset.theme || '';
     db.colorSchemeName = preset.colorSchemeName || '';
     db.textTheme = preset.textTheme || 'standard';
+
+    console.log(`🔍 Setting colorSchemeName to: "${preset.colorSchemeName}"`);
 
     // Restore custom color scheme if it was saved
     if (preset.colorScheme) {
@@ -151,6 +156,10 @@ export function loadThemePreset(presetName: string): boolean {
     }
 
     setDatabase(db);
+
+    // Verify the save worked
+    const verifyDb = getDatabase();
+    console.log(`🔍 After setDatabase - colorSchemeName in DB: "${verifyDb.colorSchemeName}"`);
 
     // Apply color scheme immediately
     applyColorScheme(preset.colorSchemeName, preset.colorScheme);

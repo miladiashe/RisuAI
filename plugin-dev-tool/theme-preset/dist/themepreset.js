@@ -303,11 +303,13 @@
       return false;
     }
     const db = getDatabase();
+    console.log(`\u{1F50D} Before load - colorSchemeName in DB: "${db.colorSchemeName}"`);
     db.customCSS = preset.customCSS || "";
     db.guiHTML = preset.guiHTML || "";
     db.theme = preset.theme || "";
     db.colorSchemeName = preset.colorSchemeName || "";
     db.textTheme = preset.textTheme || "standard";
+    console.log(`\u{1F50D} Setting colorSchemeName to: "${preset.colorSchemeName}"`);
     if (preset.colorScheme) {
       db.colorScheme = {
         type: preset.colorScheme.type || "dark",
@@ -333,6 +335,8 @@
       };
     }
     setDatabase(db);
+    const verifyDb = getDatabase();
+    console.log(`\u{1F50D} After setDatabase - colorSchemeName in DB: "${verifyDb.colorSchemeName}"`);
     applyColorScheme(preset.colorSchemeName, preset.colorScheme);
     const colorSchemeType = getColorSchemeType(preset.colorSchemeName, preset.colorScheme);
     applyTextTheme(preset.textTheme || "standard", preset.customTextTheme, colorSchemeType);
