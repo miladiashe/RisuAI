@@ -462,12 +462,15 @@ function setupEventListeners(): void {
 
     // Close button
     const closeBtn = container.querySelector('#close-preset-window');
-    closeBtn?.addEventListener('click', () => {
+    closeBtn?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        e.preventDefault();
         toggleFloatingWindow();
     });
 
     // Close on overlay click
-    windowState.overlay?.addEventListener('click', () => {
+    windowState.overlay?.addEventListener('click', (e) => {
+        e.stopPropagation();
         toggleFloatingWindow();
     });
 

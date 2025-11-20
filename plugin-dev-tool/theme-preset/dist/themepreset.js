@@ -901,10 +901,13 @@
     if (!container)
       return;
     const closeBtn = container.querySelector("#close-preset-window");
-    closeBtn?.addEventListener("click", () => {
+    closeBtn?.addEventListener("click", (e) => {
+      e.stopPropagation();
+      e.preventDefault();
       toggleFloatingWindow();
     });
-    windowState.overlay?.addEventListener("click", () => {
+    windowState.overlay?.addEventListener("click", (e) => {
+      e.stopPropagation();
       toggleFloatingWindow();
     });
     const saveBtn = container.querySelector("#save-preset-btn");
