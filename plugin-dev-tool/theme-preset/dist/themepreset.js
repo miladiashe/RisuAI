@@ -501,11 +501,13 @@
       if (themeName) {
         console.log(`\u{1F3A8} Auto-switching to theme: ${themeName} for character: ${char.name}`);
         loadThemePreset(themeName);
+        setTimeout(() => loadThemePreset(themeName), 500);
       } else {
         const defaultTheme = getDefaultTheme();
         if (defaultTheme) {
           console.log(`\u{1F3A8} Auto-switching to default theme: ${defaultTheme} (no mapping for ${char.name})`);
           loadThemePreset(defaultTheme);
+          setTimeout(() => loadThemePreset(defaultTheme), 500);
         }
       }
     } catch (e) {
@@ -518,6 +520,8 @@
     }
     console.log("\u{1F3A8} Theme auto-switch enabled");
     checkAndSwitchTheme();
+    setTimeout(() => checkAndSwitchTheme(), 1e3);
+    setTimeout(() => checkAndSwitchTheme(), 2e3);
     autoSwitchInterval = window.setInterval(() => {
       checkAndSwitchTheme();
     }, CHAR_POLL_INTERVAL);

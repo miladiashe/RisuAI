@@ -61,12 +61,16 @@ export function checkAndSwitchTheme(): void {
             // Character has a specific theme mapping
             console.log(`🎨 Auto-switching to theme: ${themeName} for character: ${char.name}`);
             loadThemePreset(themeName);
+            // Apply again after a short delay to ensure RisuAI doesn't override it
+            setTimeout(() => loadThemePreset(themeName), 500);
         } else {
             // No mapping, use default theme if set
             const defaultTheme = getDefaultTheme();
             if (defaultTheme) {
                 console.log(`🎨 Auto-switching to default theme: ${defaultTheme} (no mapping for ${char.name})`);
                 loadThemePreset(defaultTheme);
+                // Apply again after a short delay to ensure RisuAI doesn't override it
+                setTimeout(() => loadThemePreset(defaultTheme), 500);
             }
         }
     } catch (e) {
@@ -86,6 +90,11 @@ export function startAutoSwitch(): void {
 
     // Check immediately
     checkAndSwitchTheme();
+
+    // Apply theme again after delays to ensure it sticks after RisuAI initialization
+    // RisuAI might apply its own color scheme during page load
+    setTimeout(() => checkAndSwitchTheme(), 1000);
+    setTimeout(() => checkAndSwitchTheme(), 2000);
 
     // Then check periodically
     autoSwitchInterval = window.setInterval(() => {
