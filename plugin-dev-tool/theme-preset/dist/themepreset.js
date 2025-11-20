@@ -1308,17 +1308,28 @@
     });
     const header = container.querySelector("#preset-window-header");
     let isDragging = false;
+    let hasMoved = false;
     let dragOffset = { x: 0, y: 0 };
     header?.addEventListener("mousedown", (e) => {
+      if (e.target.id === "close-preset-window") {
+        return;
+      }
       isDragging = true;
+      hasMoved = false;
       const rect = container.getBoundingClientRect();
       dragOffset.x = e.clientX - rect.left;
       dragOffset.y = e.clientY - rect.top;
-      container.style.transform = "none";
     });
     document.addEventListener("mousemove", (e) => {
       if (!isDragging)
         return;
+      hasMoved = true;
+      if (container.style.transform !== "none") {
+        const rect = container.getBoundingClientRect();
+        container.style.left = `${rect.left}px`;
+        container.style.top = `${rect.top}px`;
+        container.style.transform = "none";
+      }
       const x = e.clientX - dragOffset.x;
       const y = e.clientY - dragOffset.y;
       container.style.left = `${x}px`;
