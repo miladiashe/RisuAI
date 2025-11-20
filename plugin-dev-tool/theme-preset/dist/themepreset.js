@@ -2101,9 +2101,14 @@
   console.log("\u{1F3A8} Theme Preset Manager: Initializing...");
   var settingsObserver = null;
   function setupKeyboardShortcut() {
+    const shortcut = getShortcut();
+    console.log(`\u{1F3A8} Keyboard shortcut configured: ${shortcut}`);
     document.addEventListener("keydown", (e) => {
-      const shortcut = getShortcut();
+      if ((e.ctrlKey || e.metaKey) && e.altKey) {
+        console.log(`\u{1F511} Key pressed: ${e.key}, Ctrl: ${e.ctrlKey}, Meta: ${e.metaKey}, Alt: ${e.altKey}, Shift: ${e.shiftKey}`);
+      }
       if (isShortcutMatch(e, shortcut)) {
+        console.log("\u2705 Shortcut matched!");
         e.preventDefault();
         toggleFloatingWindow();
       }
