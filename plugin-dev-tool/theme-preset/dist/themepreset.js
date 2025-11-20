@@ -237,6 +237,16 @@
   function savePresets(presets) {
     setArg(`${PLUGIN_NAME}::presets`, JSON.stringify(presets));
   }
+  function reorderPresets(fromIndex, toIndex) {
+    const presets = getPresets();
+    if (fromIndex < 0 || fromIndex >= presets.length || toIndex < 0 || toIndex >= presets.length) {
+      return false;
+    }
+    const [removed] = presets.splice(fromIndex, 1);
+    presets.splice(toIndex, 0, removed);
+    savePresets(presets);
+    return true;
+  }
   function saveCurrentTheme(presetName) {
     const db = getDatabase();
     const presets = getPresets();
@@ -1380,9 +1390,12 @@
         `;
       return;
     }
-    presets.forEach((preset) => {
+    presets.forEach((preset, index) => {
       const item = document.createElement("div");
       item.className = "preset-item";
+      item.setAttribute("draggable", "true");
+      item.setAttribute("data-index", index.toString());
+      item.setAttribute("data-name", preset.name);
       item.style.cssText = `
             display: flex;
             flex-wrap: wrap;
@@ -1403,6 +1416,14 @@
         preset.hasCustomTextTheme ? "\u{1F4DD} Text Theme" : null
       ].filter(Boolean).join(" \u2022 ");
       item.innerHTML = `
+            <div class="drag-handle" style="
+                color: var(--risu-theme-textcolor2, #888);
+                font-size: 1.2em;
+                cursor: grab;
+                user-select: none;
+                padding: 0 4px;
+                touch-action: none;
+            " title="Drag to reorder">\u22EE\u22EE</div>
             <div class="preset-info" style="flex: 1; min-width: 0;">
                 <div style="color: var(--risu-theme-textcolor, #fff); font-weight: 500; font-size: 0.95em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                     ${escapeHtml(preset.name)}
@@ -1574,6 +1595,260 @@
         });
       });
       listContainer.appendChild(item);
+    });
+    setupDragAndDrop(listContainer);
+  }
+  function setupDragAndDrop(listContainer) {
+    let draggedElement = null;
+    let draggedIndex = null;
+    let touchStartY = 0;
+    let touchCurrentY = 0;
+    let longPressTimer = null;
+    let isDragging = false;
+    let autoScrollInterval = null;
+    const LONG_PRESS_DURATION = 500;
+    const SCROLL_ZONE_SIZE = 50;
+    const SCROLL_SPEED = 5;
+    const scrollContainer = listContainer.parentElement;
+    listContainer.querySelectorAll(".preset-item").forEach((item) => {
+      item.addEventListener("dragstart", (e) => {
+        const dragEvent = e;
+        draggedElement = item;
+        draggedIndex = parseInt(draggedElement.dataset.index || "0");
+        draggedElement.style.opacity = "0.5";
+        dragEvent.dataTransfer.effectAllowed = "move";
+        const handle2 = draggedElement.querySelector(".drag-handle");
+        if (handle2)
+          handle2.style.cursor = "grabbing";
+      });
+      item.addEventListener("dragend", (e) => {
+        if (draggedElement) {
+          draggedElement.style.opacity = "1";
+          const handle2 = draggedElement.querySelector(".drag-handle");
+          if (handle2)
+            handle2.style.cursor = "grab";
+          listContainer.querySelectorAll(".preset-item").forEach((el) => {
+            el.style.borderTopColor = "";
+            el.style.borderBottomColor = "";
+            el.style.borderTopWidth = "";
+            el.style.borderBottomWidth = "";
+          });
+        }
+      });
+      item.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        const dragEvent = e;
+        dragEvent.dataTransfer.dropEffect = "move";
+        if (!draggedElement || draggedElement === item)
+          return;
+        const rect = item.getBoundingClientRect();
+        const midpoint = rect.top + rect.height / 2;
+        listContainer.querySelectorAll(".preset-item").forEach((el) => {
+          el.style.borderTopColor = "";
+          el.style.borderBottomColor = "";
+          el.style.borderTopWidth = "";
+          el.style.borderBottomWidth = "";
+        });
+        if (dragEvent.clientY < midpoint) {
+          item.style.borderTopColor = "var(--risu-theme-selected, #4a9eff)";
+          item.style.borderTopWidth = "3px";
+        } else {
+          item.style.borderBottomColor = "var(--risu-theme-selected, #4a9eff)";
+          item.style.borderBottomWidth = "3px";
+        }
+      });
+      item.addEventListener("dragleave", (e) => {
+        item.style.borderTopColor = "";
+        item.style.borderBottomColor = "";
+        item.style.borderTopWidth = "";
+        item.style.borderBottomWidth = "";
+      });
+      item.addEventListener("drop", (e) => {
+        e.preventDefault();
+        if (!draggedElement || draggedElement === item)
+          return;
+        const rect = item.getBoundingClientRect();
+        const midpoint = rect.top + rect.height / 2;
+        const targetIndex = parseInt(item.dataset.index || "0");
+        const dragEvent = e;
+        let newIndex = dragEvent.clientY < midpoint ? targetIndex : targetIndex + 1;
+        if (draggedIndex < newIndex)
+          newIndex--;
+        reorderPresets(draggedIndex, newIndex);
+        updatePresetList();
+        console.log(`\u{1F3A8} Moved preset from position ${draggedIndex} to ${newIndex}`);
+      });
+      const handle = item.querySelector(".drag-handle");
+      const onTouchStart = (e) => {
+        const touch = e.touches[0];
+        touchStartY = touch.clientY;
+        touchCurrentY = touch.clientY;
+        longPressTimer = window.setTimeout(() => {
+          isDragging = true;
+          draggedElement = item;
+          draggedIndex = parseInt(draggedElement.dataset.index || "0");
+          draggedElement.style.opacity = "0.8";
+          draggedElement.style.transform = "scale(1.05)";
+          draggedElement.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.3)";
+          draggedElement.style.zIndex = "1000";
+          if (handle)
+            handle.style.cursor = "grabbing";
+          if ("vibrate" in navigator) {
+            navigator.vibrate(50);
+          }
+        }, LONG_PRESS_DURATION);
+      };
+      const onTouchMove = (e) => {
+        if (!isDragging) {
+          if (longPressTimer) {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+          }
+          return;
+        }
+        e.preventDefault();
+        const touch = e.touches[0];
+        touchCurrentY = touch.clientY;
+        if (draggedElement) {
+          const deltaY = touchCurrentY - touchStartY;
+          draggedElement.style.transform = `translateY(${deltaY}px) scale(1.05)`;
+          const items = Array.from(listContainer.querySelectorAll(".preset-item"));
+          let targetIndex = draggedIndex;
+          for (let i = 0; i < items.length; i++) {
+            if (items[i] === draggedElement)
+              continue;
+            const rect = items[i].getBoundingClientRect();
+            const midpoint = rect.top + rect.height / 2;
+            if (touchCurrentY < midpoint && i < draggedIndex) {
+              targetIndex = i;
+              break;
+            } else if (touchCurrentY > midpoint && i > draggedIndex) {
+              targetIndex = i;
+            }
+          }
+          items.forEach((el, i) => {
+            el.style.borderTopColor = "";
+            el.style.borderBottomColor = "";
+            el.style.borderTopWidth = "";
+            el.style.borderBottomWidth = "";
+            if (i === targetIndex && i !== draggedIndex) {
+              if (targetIndex < draggedIndex) {
+                el.style.borderTopColor = "var(--risu-theme-selected, #4a9eff)";
+                el.style.borderTopWidth = "3px";
+              } else {
+                el.style.borderBottomColor = "var(--risu-theme-selected, #4a9eff)";
+                el.style.borderBottomWidth = "3px";
+              }
+            }
+          });
+          if (scrollContainer) {
+            const containerRect = scrollContainer.getBoundingClientRect();
+            const distanceFromTop = touchCurrentY - containerRect.top;
+            const distanceFromBottom = containerRect.bottom - touchCurrentY;
+            if (autoScrollInterval) {
+              clearInterval(autoScrollInterval);
+              autoScrollInterval = null;
+            }
+            if (distanceFromTop < SCROLL_ZONE_SIZE && scrollContainer.scrollTop > 0) {
+              autoScrollInterval = window.setInterval(() => {
+                scrollContainer.scrollTop -= SCROLL_SPEED;
+                if (scrollContainer.scrollTop <= 0) {
+                  if (autoScrollInterval)
+                    clearInterval(autoScrollInterval);
+                }
+              }, 16);
+            } else if (distanceFromBottom < SCROLL_ZONE_SIZE) {
+              autoScrollInterval = window.setInterval(() => {
+                scrollContainer.scrollTop += SCROLL_SPEED;
+                const maxScroll = scrollContainer.scrollHeight - scrollContainer.clientHeight;
+                if (scrollContainer.scrollTop >= maxScroll) {
+                  if (autoScrollInterval)
+                    clearInterval(autoScrollInterval);
+                }
+              }, 16);
+            }
+          }
+        }
+      };
+      const onTouchEnd = (e) => {
+        if (longPressTimer) {
+          clearTimeout(longPressTimer);
+          longPressTimer = null;
+        }
+        if (autoScrollInterval) {
+          clearInterval(autoScrollInterval);
+          autoScrollInterval = null;
+        }
+        if (!isDragging)
+          return;
+        e.preventDefault();
+        if (draggedElement) {
+          const items = Array.from(listContainer.querySelectorAll(".preset-item"));
+          let targetIndex = draggedIndex;
+          for (let i = 0; i < items.length; i++) {
+            if (items[i] === draggedElement)
+              continue;
+            const rect = items[i].getBoundingClientRect();
+            const midpoint = rect.top + rect.height / 2;
+            if (touchCurrentY < midpoint && i < draggedIndex) {
+              targetIndex = i;
+              break;
+            } else if (touchCurrentY > midpoint && i > draggedIndex) {
+              targetIndex = i;
+            }
+          }
+          if (targetIndex !== draggedIndex) {
+            reorderPresets(draggedIndex, targetIndex);
+            console.log(`\u{1F3A8} Moved preset from position ${draggedIndex} to ${targetIndex}`);
+            if ("vibrate" in navigator) {
+              navigator.vibrate(30);
+            }
+          }
+          draggedElement.style.opacity = "1";
+          draggedElement.style.transform = "";
+          draggedElement.style.boxShadow = "";
+          draggedElement.style.zIndex = "";
+          if (handle)
+            handle.style.cursor = "grab";
+          items.forEach((el) => {
+            el.style.borderTopColor = "";
+            el.style.borderBottomColor = "";
+            el.style.borderTopWidth = "";
+            el.style.borderBottomWidth = "";
+          });
+          updatePresetList();
+        }
+        isDragging = false;
+        draggedElement = null;
+        draggedIndex = null;
+      };
+      const onTouchCancel = (e) => {
+        if (longPressTimer) {
+          clearTimeout(longPressTimer);
+          longPressTimer = null;
+        }
+        if (autoScrollInterval) {
+          clearInterval(autoScrollInterval);
+          autoScrollInterval = null;
+        }
+        if (draggedElement) {
+          draggedElement.style.opacity = "1";
+          draggedElement.style.transform = "";
+          draggedElement.style.boxShadow = "";
+          draggedElement.style.zIndex = "";
+          if (handle)
+            handle.style.cursor = "grab";
+        }
+        isDragging = false;
+        draggedElement = null;
+        draggedIndex = null;
+      };
+      if (handle) {
+        handle.addEventListener("touchstart", onTouchStart, { passive: false });
+        handle.addEventListener("touchmove", onTouchMove, { passive: false });
+        handle.addEventListener("touchend", onTouchEnd, { passive: false });
+        handle.addEventListener("touchcancel", onTouchCancel, { passive: false });
+      }
     });
   }
   function toggleFloatingWindow() {
