@@ -4,7 +4,7 @@
 
 import { PLUGIN_NAME } from './constants';
 import type { ThemePreset, CharacterThemeMap } from './types';
-import { applyColorScheme, applyTextTheme, getColorSchemeType } from './color-schemes';
+import { applyColorScheme, applyTextTheme, getColorSchemeType, getColorSchemeByName } from './color-schemes';
 
 /**
  * Get all saved presets
@@ -127,7 +127,19 @@ export function loadThemePreset(presetName: string): boolean {
 
     console.log(`🔍 Setting colorSchemeName to: "${preset.colorSchemeName}"`);
 
-    // Restore custom color scheme if it was saved
+    // CRITICAL FIX: Update db.colorScheme object to match colorSchemeName
+    // This is what RisuAI's changeColorScheme() does
+    if (preset.colorSchemeName !== 'custom') {
+        // For preset color schemes (realblack, cherry, etc.),
+        // we must update db.colorScheme object from the scheme definition
+        const schemeObj = getColorSchemeByName(preset.colorSchemeName);
+        if (schemeObj) {
+            db.colorScheme = schemeObj;
+            console.log(`🔍 Updated db.colorScheme object for preset: "${preset.colorSchemeName}"`);
+        }
+    }
+
+    // Restore custom color scheme if it was saved (for custom schemes only)
     if (preset.colorScheme) {
         db.colorScheme = {
             type: preset.colorScheme.type || 'dark',
@@ -141,6 +153,7 @@ export function loadThemePreset(presetName: string): boolean {
             textcolor: preset.colorScheme.textcolor || '',
             textcolor2: preset.colorScheme.textcolor2 || ''
         };
+        console.log(`🔍 Restored custom colorScheme object`);
     }
 
     // Restore custom text theme if it was saved

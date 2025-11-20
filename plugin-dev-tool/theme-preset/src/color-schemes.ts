@@ -93,6 +93,17 @@ const colorSchemes: Record<string, any> = {
 };
 
 /**
+ * Get a color scheme object by name
+ */
+export function getColorSchemeByName(colorSchemeName: string): ColorScheme | null {
+    if (colorSchemes[colorSchemeName]) {
+        // Return a deep clone to avoid mutations
+        return JSON.parse(JSON.stringify(colorSchemes[colorSchemeName]));
+    }
+    return null;
+}
+
+/**
  * Apply a color scheme to the document
  */
 export function applyColorScheme(colorSchemeName: string, customColorScheme?: ColorScheme): void {

@@ -155,6 +155,12 @@
       type: "dark"
     }
   };
+  function getColorSchemeByName(colorSchemeName) {
+    if (colorSchemes[colorSchemeName]) {
+      return JSON.parse(JSON.stringify(colorSchemes[colorSchemeName]));
+    }
+    return null;
+  }
   function applyColorScheme(colorSchemeName, customColorScheme) {
     let colorScheme;
     if (colorSchemeName === "custom" && customColorScheme) {
@@ -310,6 +316,13 @@
     db.colorSchemeName = preset.colorSchemeName || "";
     db.textTheme = preset.textTheme || "standard";
     console.log(`\u{1F50D} Setting colorSchemeName to: "${preset.colorSchemeName}"`);
+    if (preset.colorSchemeName !== "custom") {
+      const schemeObj = getColorSchemeByName(preset.colorSchemeName);
+      if (schemeObj) {
+        db.colorScheme = schemeObj;
+        console.log(`\u{1F50D} Updated db.colorScheme object for preset: "${preset.colorSchemeName}"`);
+      }
+    }
     if (preset.colorScheme) {
       db.colorScheme = {
         type: preset.colorScheme.type || "dark",
@@ -323,6 +336,7 @@
         textcolor: preset.colorScheme.textcolor || "",
         textcolor2: preset.colorScheme.textcolor2 || ""
       };
+      console.log(`\u{1F50D} Restored custom colorScheme object`);
     }
     if (preset.customTextTheme) {
       db.customTextTheme = {
