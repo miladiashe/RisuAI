@@ -10,7 +10,15 @@ import type { ShortcutConfig } from './types';
  */
 export function getShortcut(): string {
     const saved = getArg(`${PLUGIN_NAME}::shortcut`) as string;
-    return saved || DEFAULT_SHORTCUT;
+
+    // If saved, return it
+    if (saved) {
+        return saved;
+    }
+
+    // Return platform-specific default
+    const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+    return isMac ? 'Meta+Alt+X' : DEFAULT_SHORTCUT;
 }
 
 /**
@@ -88,7 +96,7 @@ export function formatShortcutDisplay(shortcut: string): string {
     const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
     if (isMac) {
         return shortcut
-            .replace('Ctrl', '⌘')
+            .replace(/Ctrl|Meta|Cmd/g, '⌘')
             .replace('Alt', '⌥')
             .replace('Shift', '⇧');
     }

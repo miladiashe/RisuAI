@@ -18,7 +18,11 @@
   // src/shortcuts.ts
   function getShortcut() {
     const saved = getArg(`${PLUGIN_NAME}::shortcut`);
-    return saved || DEFAULT_SHORTCUT;
+    if (saved) {
+      return saved;
+    }
+    const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;
+    return isMac ? "Meta+Alt+X" : DEFAULT_SHORTCUT;
   }
   function normalizeShortcut(shortcut) {
     const parts = shortcut.split("+").map((p) => p.trim());
@@ -57,7 +61,7 @@
   function formatShortcutDisplay(shortcut) {
     const isMac = navigator.platform.toUpperCase().indexOf("MAC") >= 0;
     if (isMac) {
-      return shortcut.replace("Ctrl", "\u2318").replace("Alt", "\u2325").replace("Shift", "\u21E7");
+      return shortcut.replace(/Ctrl|Meta|Cmd/g, "\u2318").replace("Alt", "\u2325").replace("Shift", "\u21E7");
     }
     return shortcut;
   }
