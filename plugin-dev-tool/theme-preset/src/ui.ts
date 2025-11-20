@@ -12,6 +12,7 @@ import { FEEDBACK_TIMEOUT, FOCUS_DELAY } from './constants';
 import {
     getPresets,
     savePresets,
+    reorderPresets,
     saveCurrentTheme,
     loadThemePreset,
     deleteThemePreset,
@@ -1026,9 +1027,12 @@ function updatePresetList(): void {
         return;
     }
 
-    presets.forEach(preset => {
+    presets.forEach((preset, index) => {
         const item = document.createElement('div');
         item.className = 'preset-item';
+        item.setAttribute('draggable', 'true');
+        item.setAttribute('data-index', index.toString());
+        item.setAttribute('data-name', preset.name);
         item.style.cssText = `
             display: flex;
             flex-wrap: wrap;
@@ -1051,6 +1055,14 @@ function updatePresetList(): void {
         ].filter(Boolean).join(' • ');
 
         item.innerHTML = `
+            <div class="drag-handle" style="
+                color: var(--risu-theme-textcolor2, #888);
+                font-size: 1.2em;
+                cursor: grab;
+                user-select: none;
+                padding: 0 4px;
+                touch-action: none;
+            " title="Drag to reorder">⋮⋮</div>
             <div class="preset-info" style="flex: 1; min-width: 0;">
                 <div style="color: var(--risu-theme-textcolor, #fff); font-weight: 500; font-size: 0.95em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                     ${escapeHtml(preset.name)}
@@ -1241,6 +1253,343 @@ function updatePresetList(): void {
         });
 
         listContainer.appendChild(item);
+    });
+
+    // Setup drag and drop for reordering presets
+    setupDragAndDrop(listContainer);
+}
+
+/**
+ * Setup drag and drop functionality for preset list
+ */
+function setupDragAndDrop(listContainer: Element): void {
+    let draggedElement: HTMLElement | null = null;
+    let draggedIndex: number | null = null;
+
+    // Touch drag variables
+    let touchStartY = 0;
+    let touchCurrentY = 0;
+    let longPressTimer: number | null = null;
+    let isDragging = false;
+    let autoScrollInterval: number | null = null;
+
+    const LONG_PRESS_DURATION = 500; // milliseconds
+    const SCROLL_ZONE_SIZE = 50; // pixels from top/bottom
+    const SCROLL_SPEED = 5; // pixels per frame
+
+    // Get scroll container (preset-list has overflow)
+    const scrollContainer = listContainer.parentElement;
+
+    // === Desktop: Mouse Drag & Drop ===
+    listContainer.querySelectorAll('.preset-item').forEach(item => {
+        // Desktop dragstart
+        item.addEventListener('dragstart', (e) => {
+            const dragEvent = e as DragEvent;
+            draggedElement = item as HTMLElement;
+            draggedIndex = parseInt(draggedElement.dataset.index || '0');
+            draggedElement.style.opacity = '0.5';
+            dragEvent.dataTransfer!.effectAllowed = 'move';
+
+            const handle = draggedElement.querySelector('.drag-handle') as HTMLElement;
+            if (handle) handle.style.cursor = 'grabbing';
+        });
+
+        // Desktop dragend
+        item.addEventListener('dragend', (e) => {
+            if (draggedElement) {
+                draggedElement.style.opacity = '1';
+                const handle = draggedElement.querySelector('.drag-handle') as HTMLElement;
+                if (handle) handle.style.cursor = 'grab';
+
+                listContainer.querySelectorAll('.preset-item').forEach(el => {
+                    (el as HTMLElement).style.borderTopColor = '';
+                    (el as HTMLElement).style.borderBottomColor = '';
+                    (el as HTMLElement).style.borderTopWidth = '';
+                    (el as HTMLElement).style.borderBottomWidth = '';
+                });
+            }
+        });
+
+        // Desktop dragover
+        item.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            const dragEvent = e as DragEvent;
+            dragEvent.dataTransfer!.dropEffect = 'move';
+            if (!draggedElement || draggedElement === item) return;
+
+            const rect = (item as HTMLElement).getBoundingClientRect();
+            const midpoint = rect.top + rect.height / 2;
+
+            listContainer.querySelectorAll('.preset-item').forEach(el => {
+                (el as HTMLElement).style.borderTopColor = '';
+                (el as HTMLElement).style.borderBottomColor = '';
+                (el as HTMLElement).style.borderTopWidth = '';
+                (el as HTMLElement).style.borderBottomWidth = '';
+            });
+
+            if (dragEvent.clientY < midpoint) {
+                (item as HTMLElement).style.borderTopColor = 'var(--risu-theme-selected, #4a9eff)';
+                (item as HTMLElement).style.borderTopWidth = '3px';
+            } else {
+                (item as HTMLElement).style.borderBottomColor = 'var(--risu-theme-selected, #4a9eff)';
+                (item as HTMLElement).style.borderBottomWidth = '3px';
+            }
+        });
+
+        // Desktop dragleave
+        item.addEventListener('dragleave', (e) => {
+            (item as HTMLElement).style.borderTopColor = '';
+            (item as HTMLElement).style.borderBottomColor = '';
+            (item as HTMLElement).style.borderTopWidth = '';
+            (item as HTMLElement).style.borderBottomWidth = '';
+        });
+
+        // Desktop drop
+        item.addEventListener('drop', (e) => {
+            e.preventDefault();
+            if (!draggedElement || draggedElement === item) return;
+
+            const rect = (item as HTMLElement).getBoundingClientRect();
+            const midpoint = rect.top + rect.height / 2;
+            const targetIndex = parseInt((item as HTMLElement).dataset.index || '0');
+            const dragEvent = e as DragEvent;
+
+            let newIndex = dragEvent.clientY < midpoint ? targetIndex : targetIndex + 1;
+            if (draggedIndex! < newIndex) newIndex--;
+
+            reorderPresets(draggedIndex!, newIndex);
+            updatePresetList();
+
+            console.log(`🎨 Moved preset from position ${draggedIndex} to ${newIndex}`);
+        });
+
+        // === Mobile: Touch Drag ===
+        const handle = item.querySelector('.drag-handle') as HTMLElement;
+
+        // Touch start - detect long press
+        const onTouchStart = (e: TouchEvent) => {
+            const touch = e.touches[0];
+            touchStartY = touch.clientY;
+            touchCurrentY = touch.clientY;
+
+            // Start long press timer
+            longPressTimer = window.setTimeout(() => {
+                isDragging = true;
+                draggedElement = item as HTMLElement;
+                draggedIndex = parseInt(draggedElement.dataset.index || '0');
+
+                // Visual feedback
+                draggedElement.style.opacity = '0.8';
+                draggedElement.style.transform = 'scale(1.05)';
+                draggedElement.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.3)';
+                draggedElement.style.zIndex = '1000';
+
+                if (handle) handle.style.cursor = 'grabbing';
+
+                // Haptic feedback if available
+                if ('vibrate' in navigator) {
+                    navigator.vibrate(50);
+                }
+            }, LONG_PRESS_DURATION);
+        };
+
+        // Touch move - drag and auto-scroll
+        const onTouchMove = (e: TouchEvent) => {
+            if (!isDragging) {
+                // Cancel long press if moved before timer completes
+                if (longPressTimer) {
+                    clearTimeout(longPressTimer);
+                    longPressTimer = null;
+                }
+                return;
+            }
+
+            e.preventDefault();
+            const touch = e.touches[0];
+            touchCurrentY = touch.clientY;
+
+            // Move the dragged element visually
+            if (draggedElement) {
+                const deltaY = touchCurrentY - touchStartY;
+                draggedElement.style.transform = `translateY(${deltaY}px) scale(1.05)`;
+
+                // Find target position
+                const items = Array.from(listContainer.querySelectorAll('.preset-item')) as HTMLElement[];
+                let targetIndex = draggedIndex!;
+
+                for (let i = 0; i < items.length; i++) {
+                    if (items[i] === draggedElement) continue;
+
+                    const rect = items[i].getBoundingClientRect();
+                    const midpoint = rect.top + rect.height / 2;
+
+                    if (touchCurrentY < midpoint && i < draggedIndex!) {
+                        targetIndex = i;
+                        break;
+                    } else if (touchCurrentY > midpoint && i > draggedIndex!) {
+                        targetIndex = i;
+                    }
+                }
+
+                // Show visual indicator
+                items.forEach((el, i) => {
+                    el.style.borderTopColor = '';
+                    el.style.borderBottomColor = '';
+                    el.style.borderTopWidth = '';
+                    el.style.borderBottomWidth = '';
+
+                    if (i === targetIndex && i !== draggedIndex) {
+                        if (targetIndex < draggedIndex!) {
+                            el.style.borderTopColor = 'var(--risu-theme-selected, #4a9eff)';
+                            el.style.borderTopWidth = '3px';
+                        } else {
+                            el.style.borderBottomColor = 'var(--risu-theme-selected, #4a9eff)';
+                            el.style.borderBottomWidth = '3px';
+                        }
+                    }
+                });
+
+                // Auto-scroll if near edges
+                if (scrollContainer) {
+                    const containerRect = scrollContainer.getBoundingClientRect();
+                    const distanceFromTop = touchCurrentY - containerRect.top;
+                    const distanceFromBottom = containerRect.bottom - touchCurrentY;
+
+                    // Clear existing scroll interval
+                    if (autoScrollInterval) {
+                        clearInterval(autoScrollInterval);
+                        autoScrollInterval = null;
+                    }
+
+                    // Scroll up if near top
+                    if (distanceFromTop < SCROLL_ZONE_SIZE && scrollContainer.scrollTop > 0) {
+                        autoScrollInterval = window.setInterval(() => {
+                            scrollContainer.scrollTop -= SCROLL_SPEED;
+                            if (scrollContainer.scrollTop <= 0) {
+                                if (autoScrollInterval) clearInterval(autoScrollInterval);
+                            }
+                        }, 16); // ~60fps
+                    }
+                    // Scroll down if near bottom
+                    else if (distanceFromBottom < SCROLL_ZONE_SIZE) {
+                        autoScrollInterval = window.setInterval(() => {
+                            scrollContainer.scrollTop += SCROLL_SPEED;
+                            const maxScroll = scrollContainer.scrollHeight - scrollContainer.clientHeight;
+                            if (scrollContainer.scrollTop >= maxScroll) {
+                                if (autoScrollInterval) clearInterval(autoScrollInterval);
+                            }
+                        }, 16);
+                    }
+                }
+            }
+        };
+
+        // Touch end - drop
+        const onTouchEnd = (e: TouchEvent) => {
+            // Cancel long press timer if still running
+            if (longPressTimer) {
+                clearTimeout(longPressTimer);
+                longPressTimer = null;
+            }
+
+            // Stop auto-scroll
+            if (autoScrollInterval) {
+                clearInterval(autoScrollInterval);
+                autoScrollInterval = null;
+            }
+
+            if (!isDragging) return;
+
+            e.preventDefault();
+
+            if (draggedElement) {
+                // Find target position
+                const items = Array.from(listContainer.querySelectorAll('.preset-item')) as HTMLElement[];
+                let targetIndex = draggedIndex!;
+
+                for (let i = 0; i < items.length; i++) {
+                    if (items[i] === draggedElement) continue;
+
+                    const rect = items[i].getBoundingClientRect();
+                    const midpoint = rect.top + rect.height / 2;
+
+                    if (touchCurrentY < midpoint && i < draggedIndex!) {
+                        targetIndex = i;
+                        break;
+                    } else if (touchCurrentY > midpoint && i > draggedIndex!) {
+                        targetIndex = i;
+                    }
+                }
+
+                // Perform reorder if position changed
+                if (targetIndex !== draggedIndex) {
+                    reorderPresets(draggedIndex!, targetIndex);
+                    console.log(`🎨 Moved preset from position ${draggedIndex} to ${targetIndex}`);
+
+                    // Haptic feedback
+                    if ('vibrate' in navigator) {
+                        navigator.vibrate(30);
+                    }
+                }
+
+                // Reset styles
+                draggedElement.style.opacity = '1';
+                draggedElement.style.transform = '';
+                draggedElement.style.boxShadow = '';
+                draggedElement.style.zIndex = '';
+
+                if (handle) handle.style.cursor = 'grab';
+
+                // Clear visual indicators
+                items.forEach(el => {
+                    el.style.borderTopColor = '';
+                    el.style.borderBottomColor = '';
+                    el.style.borderTopWidth = '';
+                    el.style.borderBottomWidth = '';
+                });
+
+                // Update list
+                updatePresetList();
+            }
+
+            isDragging = false;
+            draggedElement = null;
+            draggedIndex = null;
+        };
+
+        // Touch cancel
+        const onTouchCancel = (e: TouchEvent) => {
+            if (longPressTimer) {
+                clearTimeout(longPressTimer);
+                longPressTimer = null;
+            }
+
+            if (autoScrollInterval) {
+                clearInterval(autoScrollInterval);
+                autoScrollInterval = null;
+            }
+
+            if (draggedElement) {
+                draggedElement.style.opacity = '1';
+                draggedElement.style.transform = '';
+                draggedElement.style.boxShadow = '';
+                draggedElement.style.zIndex = '';
+
+                if (handle) handle.style.cursor = 'grab';
+            }
+
+            isDragging = false;
+            draggedElement = null;
+            draggedIndex = null;
+        };
+
+        // Attach touch listeners to drag handle only
+        if (handle) {
+            handle.addEventListener('touchstart', onTouchStart, { passive: false });
+            handle.addEventListener('touchmove', onTouchMove, { passive: false });
+            handle.addEventListener('touchend', onTouchEnd, { passive: false });
+            handle.addEventListener('touchcancel', onTouchCancel, { passive: false });
+        }
     });
 }
 

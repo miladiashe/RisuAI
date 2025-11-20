@@ -30,6 +30,25 @@ export function savePresets(presets: ThemePreset[]): void {
 }
 
 /**
+ * Reorder presets by moving a preset from one index to another
+ */
+export function reorderPresets(fromIndex: number, toIndex: number): boolean {
+    const presets = getPresets();
+
+    // Validate indices
+    if (fromIndex < 0 || fromIndex >= presets.length || toIndex < 0 || toIndex >= presets.length) {
+        return false;
+    }
+
+    // Remove from old position and insert at new position
+    const [removed] = presets.splice(fromIndex, 1);
+    presets.splice(toIndex, 0, removed);
+
+    savePresets(presets);
+    return true;
+}
+
+/**
  * Save current theme as a preset
  */
 export function saveCurrentTheme(presetName: string): ThemePreset {
