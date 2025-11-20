@@ -8,9 +8,12 @@
 import { INIT_DELAY } from './constants';
 import { getShortcut, isShortcutMatch } from './shortcuts';
 import { initAutoSwitch, stopAutoSwitch } from './auto-switch';
-import { createFloatingWindow, toggleFloatingWindow, cleanupUI } from './ui';
+import { createFloatingWindow, toggleFloatingWindow, cleanupUI, ensureSettingsButton, setupSettingsObserver } from './ui';
 
 console.log('🎨 Theme Preset Manager: Initializing...');
+
+// MutationObserver instance
+let settingsObserver: MutationObserver | null = null;
 
 // Setup keyboard shortcut handler
 function setupKeyboardShortcut(): void {
@@ -34,6 +37,12 @@ function init(): void {
     // Initialize auto-switch if enabled
     initAutoSwitch();
 
+    // Add button to Display Settings
+    ensureSettingsButton();
+
+    // Watch for DOM changes to re-inject button if needed
+    settingsObserver = setupSettingsObserver();
+
     console.log('🎨 Theme Preset Manager: Ready!');
     console.log(`   Press ${getShortcut()} to open the theme manager`);
 }
@@ -48,4 +57,9 @@ onUnload(() => {
     console.log('🎨 Theme Preset Manager: Cleaning up...');
     stopAutoSwitch();
     cleanupUI();
+
+    // Disconnect observer
+    if (settingsObserver) {
+        settingsObserver.disconnect();
+    }
 });

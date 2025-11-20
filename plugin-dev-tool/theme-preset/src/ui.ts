@@ -1376,4 +1376,152 @@ export function cleanupUI(): void {
         windowState.overlay.remove();
         windowState.overlay = null;
     }
+
+    // Remove settings button
+    const existingButtons = document.querySelectorAll('.theme-preset-settings-btn');
+    existingButtons.forEach(btn => btn.remove());
+}
+
+/**
+ * Debounce helper function
+ */
+function debounce<T extends (...args: any[]) => any>(func: T, wait: number): (...args: Parameters<T>) => void {
+    let timeout: number | null = null;
+    return function(this: any, ...args: Parameters<T>) {
+        if (timeout !== null) {
+            clearTimeout(timeout);
+        }
+        timeout = window.setTimeout(() => {
+            func.apply(this, args);
+        }, wait);
+    };
+}
+
+/**
+ * Inject "Theme Presets" button into Display Settings
+ */
+export function ensureSettingsButton(): void {
+    // Find all existing buttons we added
+    const existingButtons = document.querySelectorAll('.theme-preset-settings-btn');
+
+    // Find the color scheme section (text-textcolor class with "colorScheme" or similar text)
+    const colorSchemeLabels = Array.from(document.querySelectorAll('span.text-textcolor')).filter(el => {
+        const text = el.textContent || '';
+        return text.includes('Color Scheme') || text.includes('색상') || text.includes('colorScheme');
+    });
+
+    if (colorSchemeLabels.length === 0) {
+        // Not in display settings, remove any existing buttons
+        existingButtons.forEach(btn => btn.remove());
+        return;
+    }
+
+    // Find the parent container
+    const label = colorSchemeLabels[0];
+    let container = label.parentElement;
+
+    if (!container) return;
+
+    // Check if button already exists in this container
+    const existingBtn = container.querySelector('.theme-preset-settings-btn');
+    if (existingBtn) return; // Already added
+
+    // Remove buttons from other locations
+    existingButtons.forEach(btn => {
+        if (!container!.contains(btn)) btn.remove();
+    });
+
+    // Find where to insert (after the custom color scheme section if it exists)
+    let insertPoint: Element | null = null;
+
+    // Look for the "textColor" label which comes after color scheme settings
+    const textColorLabels = Array.from(document.querySelectorAll('span.text-textcolor')).filter(el => {
+        const text = el.textContent || '';
+        return text.includes('Text Color') || text.includes('텍스트') || text.includes('textColor');
+    });
+
+    if (textColorLabels.length > 0) {
+        insertPoint = textColorLabels[0];
+    }
+
+    // Create button
+    const btn = document.createElement('button');
+    btn.className = 'theme-preset-settings-btn';
+    btn.style.cssText = `
+        margin-top: 16px;
+        margin-bottom: 8px;
+        padding: 10px 16px;
+        border-radius: 8px;
+        border: 1px solid var(--risu-theme-darkborderc, #333);
+        background: var(--risu-theme-darkbutton, #333);
+        color: var(--risu-theme-textcolor, #fff);
+        cursor: pointer;
+        font-weight: 500;
+        font-size: 14px;
+        width: 100%;
+        transition: all 0.2s;
+    `;
+    btn.textContent = '🎨 Theme Presets';
+    btn.onmouseover = () => {
+        btn.style.background = 'var(--risu-theme-selected, #444)';
+        btn.style.transform = 'translateY(-1px)';
+    };
+    btn.onmouseout = () => {
+        btn.style.background = 'var(--risu-theme-darkbutton, #333)';
+        btn.style.transform = '';
+    };
+    btn.onclick = () => {
+        toggleFloatingWindow();
+    };
+
+    // Insert button
+    if (insertPoint && insertPoint.parentElement) {
+        insertPoint.parentElement.insertBefore(btn, insertPoint);
+    } else {
+        container.appendChild(btn);
+    }
+}
+
+/**
+ * Setup MutationObserver to watch for settings page changes
+ */
+export function setupSettingsObserver(): MutationObserver {
+    const debouncedEnsureSettingsButton = debounce(ensureSettingsButton, 300);
+    const observer = new MutationObserver(() => {
+        debouncedEnsureSettingsButton();
+    });
+
+    // Find the settings container to observe (more efficient than observing entire body)
+    const findSettingsContainer = (): Element | null => {
+        // Try to find the main settings container
+        // Look for the Display Settings h2 header and observe its parent
+        const headers = Array.from(document.querySelectorAll('h2')).filter(el => {
+            const text = el.textContent || '';
+            return text.includes('Display') || text.includes('디스플레이') || text.includes('display');
+        });
+
+        if (headers.length > 0) {
+            // Get the parent container that holds all settings
+            let container: Element | null = headers[0].parentElement;
+            // Go up a few levels to get a larger container that encompasses submenu changes
+            for (let i = 0; i < 2 && container && container.parentElement; i++) {
+                container = container.parentElement;
+            }
+            return container;
+        }
+        return null;
+    };
+
+    const settingsContainer = findSettingsContainer();
+
+    if (settingsContainer) {
+        observer.observe(settingsContainer, { childList: true, subtree: true });
+        console.log('🎨 Theme Preset: Observing settings container only');
+    } else {
+        // Fallback to body if we can't find the settings container
+        observer.observe(document.body, { childList: true, subtree: true });
+        console.log('🎨 Theme Preset: Fallback to observing entire body');
+    }
+
+    return observer;
 }

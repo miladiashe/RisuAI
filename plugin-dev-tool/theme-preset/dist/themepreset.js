@@ -1666,10 +1666,116 @@
       windowState.overlay.remove();
       windowState.overlay = null;
     }
+    const existingButtons = document.querySelectorAll(".theme-preset-settings-btn");
+    existingButtons.forEach((btn) => btn.remove());
+  }
+  function debounce(func, wait) {
+    let timeout = null;
+    return function(...args) {
+      if (timeout !== null) {
+        clearTimeout(timeout);
+      }
+      timeout = window.setTimeout(() => {
+        func.apply(this, args);
+      }, wait);
+    };
+  }
+  function ensureSettingsButton() {
+    const existingButtons = document.querySelectorAll(".theme-preset-settings-btn");
+    const colorSchemeLabels = Array.from(document.querySelectorAll("span.text-textcolor")).filter((el) => {
+      const text = el.textContent || "";
+      return text.includes("Color Scheme") || text.includes("\uC0C9\uC0C1") || text.includes("colorScheme");
+    });
+    if (colorSchemeLabels.length === 0) {
+      existingButtons.forEach((btn2) => btn2.remove());
+      return;
+    }
+    const label = colorSchemeLabels[0];
+    let container = label.parentElement;
+    if (!container)
+      return;
+    const existingBtn = container.querySelector(".theme-preset-settings-btn");
+    if (existingBtn)
+      return;
+    existingButtons.forEach((btn2) => {
+      if (!container.contains(btn2))
+        btn2.remove();
+    });
+    let insertPoint = null;
+    const textColorLabels = Array.from(document.querySelectorAll("span.text-textcolor")).filter((el) => {
+      const text = el.textContent || "";
+      return text.includes("Text Color") || text.includes("\uD14D\uC2A4\uD2B8") || text.includes("textColor");
+    });
+    if (textColorLabels.length > 0) {
+      insertPoint = textColorLabels[0];
+    }
+    const btn = document.createElement("button");
+    btn.className = "theme-preset-settings-btn";
+    btn.style.cssText = `
+        margin-top: 16px;
+        margin-bottom: 8px;
+        padding: 10px 16px;
+        border-radius: 8px;
+        border: 1px solid var(--risu-theme-darkborderc, #333);
+        background: var(--risu-theme-darkbutton, #333);
+        color: var(--risu-theme-textcolor, #fff);
+        cursor: pointer;
+        font-weight: 500;
+        font-size: 14px;
+        width: 100%;
+        transition: all 0.2s;
+    `;
+    btn.textContent = "\u{1F3A8} Theme Presets";
+    btn.onmouseover = () => {
+      btn.style.background = "var(--risu-theme-selected, #444)";
+      btn.style.transform = "translateY(-1px)";
+    };
+    btn.onmouseout = () => {
+      btn.style.background = "var(--risu-theme-darkbutton, #333)";
+      btn.style.transform = "";
+    };
+    btn.onclick = () => {
+      toggleFloatingWindow();
+    };
+    if (insertPoint && insertPoint.parentElement) {
+      insertPoint.parentElement.insertBefore(btn, insertPoint);
+    } else {
+      container.appendChild(btn);
+    }
+  }
+  function setupSettingsObserver() {
+    const debouncedEnsureSettingsButton = debounce(ensureSettingsButton, 300);
+    const observer = new MutationObserver(() => {
+      debouncedEnsureSettingsButton();
+    });
+    const findSettingsContainer = () => {
+      const headers = Array.from(document.querySelectorAll("h2")).filter((el) => {
+        const text = el.textContent || "";
+        return text.includes("Display") || text.includes("\uB514\uC2A4\uD50C\uB808\uC774") || text.includes("display");
+      });
+      if (headers.length > 0) {
+        let container = headers[0].parentElement;
+        for (let i = 0; i < 2 && container && container.parentElement; i++) {
+          container = container.parentElement;
+        }
+        return container;
+      }
+      return null;
+    };
+    const settingsContainer = findSettingsContainer();
+    if (settingsContainer) {
+      observer.observe(settingsContainer, { childList: true, subtree: true });
+      console.log("\u{1F3A8} Theme Preset: Observing settings container only");
+    } else {
+      observer.observe(document.body, { childList: true, subtree: true });
+      console.log("\u{1F3A8} Theme Preset: Fallback to observing entire body");
+    }
+    return observer;
   }
 
   // src/index.ts
   console.log("\u{1F3A8} Theme Preset Manager: Initializing...");
+  var settingsObserver = null;
   function setupKeyboardShortcut() {
     document.addEventListener("keydown", (e) => {
       const shortcut = getShortcut();
@@ -1683,6 +1789,8 @@
     createFloatingWindow();
     setupKeyboardShortcut();
     initAutoSwitch();
+    ensureSettingsButton();
+    settingsObserver = setupSettingsObserver();
     console.log("\u{1F3A8} Theme Preset Manager: Ready!");
     console.log(`   Press ${getShortcut()} to open the theme manager`);
   }
@@ -1693,4 +1801,7 @@
     console.log("\u{1F3A8} Theme Preset Manager: Cleaning up...");
     stopAutoSwitch();
     cleanupUI();
+    if (settingsObserver) {
+      settingsObserver.disconnect();
+    }
   });
