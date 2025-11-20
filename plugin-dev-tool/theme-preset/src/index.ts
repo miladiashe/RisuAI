@@ -17,17 +17,9 @@ let settingsObserver: MutationObserver | null = null;
 
 // Setup keyboard shortcut handler
 function setupKeyboardShortcut(): void {
-    const shortcut = getShortcut();
-    console.log(`🎨 Keyboard shortcut configured: ${shortcut}`);
-
     document.addEventListener('keydown', (e: KeyboardEvent) => {
-        // Debug logging - show ALL keys with modifiers
-        if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) {
-            console.log(`🔑 Key: "${e.key}" (code: ${e.code}), Ctrl: ${e.ctrlKey}, Meta: ${e.metaKey}, Alt: ${e.altKey}, Shift: ${e.shiftKey}`);
-        }
-
+        const shortcut = getShortcut();
         if (isShortcutMatch(e, shortcut)) {
-            console.log('✅ Shortcut matched!');
             e.preventDefault();
             toggleFloatingWindow();
         }

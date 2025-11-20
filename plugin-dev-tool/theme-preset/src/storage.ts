@@ -117,15 +117,11 @@ export function loadThemePreset(presetName: string): boolean {
 
     const db = getDatabase();
 
-    console.log(`🔍 Before load - colorSchemeName in DB: "${db.colorSchemeName}"`);
-
     db.customCSS = preset.customCSS || '';
     db.guiHTML = preset.guiHTML || '';
     db.theme = preset.theme || '';
     db.colorSchemeName = preset.colorSchemeName || '';
     db.textTheme = preset.textTheme || 'standard';
-
-    console.log(`🔍 Setting colorSchemeName to: "${preset.colorSchemeName}"`);
 
     // CRITICAL FIX: Update db.colorScheme object to match colorSchemeName
     // This is what RisuAI's changeColorScheme() does
@@ -135,7 +131,6 @@ export function loadThemePreset(presetName: string): boolean {
         const schemeObj = getColorSchemeByName(preset.colorSchemeName);
         if (schemeObj) {
             db.colorScheme = schemeObj;
-            console.log(`🔍 Updated db.colorScheme object for preset: "${preset.colorSchemeName}"`);
         }
     }
 
@@ -153,7 +148,6 @@ export function loadThemePreset(presetName: string): boolean {
             textcolor: preset.colorScheme.textcolor || '',
             textcolor2: preset.colorScheme.textcolor2 || ''
         };
-        console.log(`🔍 Restored custom colorScheme object`);
     }
 
     // Restore custom text theme if it was saved
@@ -169,10 +163,6 @@ export function loadThemePreset(presetName: string): boolean {
     }
 
     setDatabase(db);
-
-    // Verify the save worked
-    const verifyDb = getDatabase();
-    console.log(`🔍 After setDatabase - colorSchemeName in DB: "${verifyDb.colorSchemeName}"`);
 
     // Apply color scheme immediately
     applyColorScheme(preset.colorSchemeName, preset.colorScheme);

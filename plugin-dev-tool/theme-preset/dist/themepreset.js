@@ -309,18 +309,15 @@
       return false;
     }
     const db = getDatabase();
-    console.log(`\u{1F50D} Before load - colorSchemeName in DB: "${db.colorSchemeName}"`);
     db.customCSS = preset.customCSS || "";
     db.guiHTML = preset.guiHTML || "";
     db.theme = preset.theme || "";
     db.colorSchemeName = preset.colorSchemeName || "";
     db.textTheme = preset.textTheme || "standard";
-    console.log(`\u{1F50D} Setting colorSchemeName to: "${preset.colorSchemeName}"`);
     if (preset.colorSchemeName !== "custom") {
       const schemeObj = getColorSchemeByName(preset.colorSchemeName);
       if (schemeObj) {
         db.colorScheme = schemeObj;
-        console.log(`\u{1F50D} Updated db.colorScheme object for preset: "${preset.colorSchemeName}"`);
       }
     }
     if (preset.colorScheme) {
@@ -336,7 +333,6 @@
         textcolor: preset.colorScheme.textcolor || "",
         textcolor2: preset.colorScheme.textcolor2 || ""
       };
-      console.log(`\u{1F50D} Restored custom colorScheme object`);
     }
     if (preset.customTextTheme) {
       db.customTextTheme = {
@@ -349,8 +345,6 @@
       };
     }
     setDatabase(db);
-    const verifyDb = getDatabase();
-    console.log(`\u{1F50D} After setDatabase - colorSchemeName in DB: "${verifyDb.colorSchemeName}"`);
     applyColorScheme(preset.colorSchemeName, preset.colorScheme);
     const colorSchemeType = getColorSchemeType(preset.colorSchemeName, preset.colorScheme);
     applyTextTheme(preset.textTheme || "standard", preset.customTextTheme, colorSchemeType);
@@ -2125,14 +2119,9 @@
   console.log("\u{1F3A8} Theme Preset Manager: Initializing...");
   var settingsObserver = null;
   function setupKeyboardShortcut() {
-    const shortcut = getShortcut();
-    console.log(`\u{1F3A8} Keyboard shortcut configured: ${shortcut}`);
     document.addEventListener("keydown", (e) => {
-      if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) {
-        console.log(`\u{1F511} Key: "${e.key}" (code: ${e.code}), Ctrl: ${e.ctrlKey}, Meta: ${e.metaKey}, Alt: ${e.altKey}, Shift: ${e.shiftKey}`);
-      }
+      const shortcut = getShortcut();
       if (isShortcutMatch(e, shortcut)) {
-        console.log("\u2705 Shortcut matched!");
         e.preventDefault();
         toggleFloatingWindow();
       }
