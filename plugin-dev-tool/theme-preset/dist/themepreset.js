@@ -1544,6 +1544,9 @@
     windowState.window.style.display = isVisible ? "none" : "flex";
     windowState.overlay.style.display = isVisible ? "none" : "block";
     if (!isVisible) {
+      windowState.window.style.top = "50%";
+      windowState.window.style.left = "50%";
+      windowState.window.style.transform = "translate(-50%, -50%)";
       updatePresetList();
     }
   }
@@ -1737,7 +1740,9 @@
       btn.style.background = "var(--risu-theme-darkbutton, #333)";
       btn.style.transform = "";
     };
-    btn.onclick = () => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      e.preventDefault();
       toggleFloatingWindow();
     };
     if (insertPoint && insertPoint.parentElement) {
