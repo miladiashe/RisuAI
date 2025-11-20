@@ -21,9 +21,9 @@ function setupKeyboardShortcut(): void {
     console.log(`🎨 Keyboard shortcut configured: ${shortcut}`);
 
     document.addEventListener('keydown', (e: KeyboardEvent) => {
-        // Debug logging for modifier keys
-        if ((e.ctrlKey || e.metaKey) && e.altKey) {
-            console.log(`🔑 Key pressed: ${e.key}, Ctrl: ${e.ctrlKey}, Meta: ${e.metaKey}, Alt: ${e.altKey}, Shift: ${e.shiftKey}`);
+        // Debug logging - show ALL keys with modifiers
+        if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) {
+            console.log(`🔑 Key: "${e.key}" (code: ${e.code}), Ctrl: ${e.ctrlKey}, Meta: ${e.metaKey}, Alt: ${e.altKey}, Shift: ${e.shiftKey}`);
         }
 
         if (isShortcutMatch(e, shortcut)) {
