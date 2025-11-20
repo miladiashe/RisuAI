@@ -1208,11 +1208,6 @@ export function toggleFloatingWindow(): void {
     windowState.overlay!.style.display = isVisible ? 'none' : 'block';
 
     if (!isVisible) {
-        // Reset position to center when opening
-        windowState.window!.style.top = '50%';
-        windowState.window!.style.left = '50%';
-        windowState.window!.style.transform = 'translate(-50%, -50%)';
-
         updatePresetList();
     }
 }
