@@ -179,6 +179,33 @@ export function createFloatingWindow(): HTMLElement {
         return windowState.window;
     }
 
+    // Add responsive styles for mobile
+    if (!document.getElementById('theme-preset-mobile-styles')) {
+        const style = document.createElement('style');
+        style.id = 'theme-preset-mobile-styles';
+        style.textContent = `
+            /* Mobile responsive layout for preset items */
+            @media screen and (max-width: 600px) {
+                .preset-item {
+                    flex-direction: column !important;
+                    align-items: stretch !important;
+                }
+
+                .preset-info {
+                    flex: 1 1 100% !important;
+                    width: 100% !important;
+                    margin-bottom: 8px !important;
+                }
+
+                .preset-buttons {
+                    width: 100% !important;
+                    justify-content: center !important;
+                }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
     // Create overlay background
     const overlay = document.createElement('div');
     overlay.id = 'theme-preset-overlay';
@@ -1001,8 +1028,10 @@ function updatePresetList(): void {
 
     presets.forEach(preset => {
         const item = document.createElement('div');
+        item.className = 'preset-item';
         item.style.cssText = `
             display: flex;
+            flex-wrap: wrap;
             align-items: center;
             gap: 10px;
             padding: 12px 14px;
@@ -1022,7 +1051,7 @@ function updatePresetList(): void {
         ].filter(Boolean).join(' • ');
 
         item.innerHTML = `
-            <div style="flex: 1; min-width: 0;">
+            <div class="preset-info" style="flex: 1; min-width: 0;">
                 <div style="color: var(--risu-theme-textcolor, #fff); font-weight: 500; font-size: 0.95em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
                     ${escapeHtml(preset.name)}
                 </div>
@@ -1030,26 +1059,28 @@ function updatePresetList(): void {
                     ${detailsText}
                 </div>
             </div>
-            <button class="load-btn" data-name="${escapeHtml(preset.name)}"
-                    style="padding: 6px 12px; border-radius: 5px; border: none; background: var(--risu-theme-selected, #4a9eff); color: var(--risu-theme-textcolor, #fff); cursor: pointer; font-size: 0.85em; font-weight: 500; white-space: nowrap; transition: all 0.2s;"
-                    title="Load theme">
-                📥 Load
-            </button>
-            <button class="rename-btn" data-name="${escapeHtml(preset.name)}"
-                    style="padding: 6px 10px; border-radius: 5px; border: none; background: var(--risu-theme-darkbutton, #444); color: var(--risu-theme-textcolor, #fff); cursor: pointer; font-size: 0.85em; transition: all 0.2s;"
-                    title="Rename theme">
-                ✏️
-            </button>
-            <button class="export-btn" data-name="${escapeHtml(preset.name)}"
-                    style="padding: 6px 10px; border-radius: 5px; border: none; background: var(--risu-theme-darkbutton, #444); color: var(--risu-theme-textcolor, #fff); cursor: pointer; font-size: 0.85em; transition: all 0.2s;"
-                    title="Export theme to file">
-                💾
-            </button>
-            <button class="delete-btn" data-name="${escapeHtml(preset.name)}"
-                    style="padding: 6px 10px; border-radius: 5px; border: none; background: var(--risu-theme-draculared, #ff5555); color: var(--risu-theme-textcolor, #fff); cursor: pointer; font-size: 0.85em; transition: all 0.2s;"
-                    title="Delete theme">
-                🗑️
-            </button>
+            <div class="preset-buttons" style="display: flex; gap: 8px; flex-wrap: wrap;">
+                <button class="load-btn" data-name="${escapeHtml(preset.name)}"
+                        style="padding: 6px 12px; border-radius: 5px; border: none; background: var(--risu-theme-selected, #4a9eff); color: var(--risu-theme-textcolor, #fff); cursor: pointer; font-size: 0.85em; font-weight: 500; white-space: nowrap; transition: all 0.2s;"
+                        title="Load theme">
+                    📥 Load
+                </button>
+                <button class="rename-btn" data-name="${escapeHtml(preset.name)}"
+                        style="padding: 6px 10px; border-radius: 5px; border: none; background: var(--risu-theme-darkbutton, #444); color: var(--risu-theme-textcolor, #fff); cursor: pointer; font-size: 0.85em; transition: all 0.2s;"
+                        title="Rename theme">
+                    ✏️
+                </button>
+                <button class="export-btn" data-name="${escapeHtml(preset.name)}"
+                        style="padding: 6px 10px; border-radius: 5px; border: none; background: var(--risu-theme-darkbutton, #444); color: var(--risu-theme-textcolor, #fff); cursor: pointer; font-size: 0.85em; transition: all 0.2s;"
+                        title="Export theme to file">
+                    💾
+                </button>
+                <button class="delete-btn" data-name="${escapeHtml(preset.name)}"
+                        style="padding: 6px 10px; border-radius: 5px; border: none; background: var(--risu-theme-draculared, #ff5555); color: var(--risu-theme-textcolor, #fff); cursor: pointer; font-size: 0.85em; transition: all 0.2s;"
+                        title="Delete theme">
+                    🗑️
+                </button>
+            </div>
         `;
 
         // Hover effects
