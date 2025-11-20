@@ -54,8 +54,10 @@
   }
   function isShortcutMatch(event, shortcut) {
     const parsed = parseShortcut(shortcut);
-    const modifiersMatch = event.ctrlKey === parsed.ctrl && event.altKey === parsed.alt && event.shiftKey === parsed.shift && event.metaKey === parsed.meta;
-    const keyMatch = event.key.toUpperCase() === parsed.key.toUpperCase();
+    const ctrlOrMetaPressed = event.ctrlKey || event.metaKey;
+    const modifiersMatch = ctrlOrMetaPressed === (parsed.ctrl || parsed.meta) && event.altKey === parsed.alt && event.shiftKey === parsed.shift;
+    const normalizedCode = event.code.replace("Key", "").toUpperCase();
+    const keyMatch = normalizedCode === parsed.key.toUpperCase();
     return modifiersMatch && keyMatch;
   }
   function formatShortcutDisplay(shortcut) {

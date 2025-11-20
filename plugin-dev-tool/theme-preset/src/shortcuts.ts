@@ -78,13 +78,17 @@ export function isShortcutMatch(event: KeyboardEvent, shortcut: string): boolean
     const parsed = parseShortcut(shortcut);
 
     // Check if the pressed key combination EXACTLY matches the shortcut
+    // Note: On Mac in RisuAI, Cmd key sometimes reports as Ctrl, so we check both
+    const ctrlOrMetaPressed = event.ctrlKey || event.metaKey;
     const modifiersMatch =
-        event.ctrlKey === parsed.ctrl &&
+        ctrlOrMetaPressed === (parsed.ctrl || parsed.meta) &&
         event.altKey === parsed.alt &&
-        event.shiftKey === parsed.shift &&
-        event.metaKey === parsed.meta;
+        event.shiftKey === parsed.shift;
 
-    const keyMatch = event.key.toUpperCase() === parsed.key.toUpperCase();
+    // Use e.code instead of e.key to avoid special character issues
+    // e.g., on Mac, Option+X produces "≈" but e.code is still "KeyX"
+    const normalizedCode = event.code.replace('Key', '').toUpperCase();
+    const keyMatch = normalizedCode === parsed.key.toUpperCase();
 
     return modifiersMatch && keyMatch;
 }
