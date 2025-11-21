@@ -863,8 +863,33 @@ export function addFetchLog(arg: {
 }
 
 /**
+ * Gets the current number of fetch logs.
+ * @returns {number} The number of fetch logs.
+ */
+export function getFetchLogCount(): number {
+  return fetchLog.length;
+}
+
+/**
+ * Updates recent fetch logs with a chatId (generationId).
+ * This associates fetch logs created by plugins with a specific chat message.
+ * @param {string} chatId - The generation ID to associate with recent logs.
+ * @param {number} previousCount - The number of logs before the plugin execution.
+ */
+export function updateRecentFetchLogs(chatId: string | undefined, previousCount: number): void {
+  if (!chatId) return;  // Skip if no chatId (e.g., emotion/translate requests)
+
+  const newLogsCount = fetchLog.length - previousCount;
+  for (let i = 0; i < newLogsCount; i++) {
+    if (!fetchLog[i].chatId) {  // Don't overwrite existing chatId
+      fetchLog[i].chatId = chatId;
+    }
+  }
+}
+
+/**
  * Performs a global fetch request.
- * 
+ *
  * @param {string} url - The URL to fetch.
  * @param {GlobalFetchArgs} [arg={}] - The arguments for the fetch request.
  * @returns {Promise<GlobalFetchResult>} - The result of the fetch request.

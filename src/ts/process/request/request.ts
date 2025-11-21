@@ -1,6 +1,6 @@
 import { Ollama } from 'ollama/dist/browser.mjs';
 import { language } from "../../../lang";
-import { globalFetch } from "../../globalApi.svelte";
+import { globalFetch, getFetchLogCount, updateRecentFetchLogs } from "../../globalApi.svelte";
 import { getModelInfo, LLMFlags, LLMFormat, type LLMModel } from "../../model/modellist";
 import { risuChatParser, risuEscape, risuUnescape } from "../../parser.svelte";
 import { pluginProcess, pluginV2 } from "../../plugins/plugins";
@@ -976,7 +976,10 @@ async function requestPlugin(arg:RequestDataArgumentExtended):Promise<requestDat
                 })
             }
         }
-    
+
+        // Record fetch log count before plugin execution
+        const beforeLogCount = getFetchLogCount()
+
         const d = v2Function ? (await v2Function(applyParameters({
             prompt_chat: formated,
             mode: arg.mode,
@@ -992,6 +995,9 @@ async function requestPlugin(arg:RequestDataArgumentExtended):Promise<requestDat
             presence_penalty: (db.PresensePenalty / 100),
             frequency_penalty: (db.frequencyPenalty / 100)
         })
+
+        // Associate fetch logs created by plugin with this chat message
+        updateRecentFetchLogs(arg.chatId, beforeLogCount)
     
         if(!d){
             return {
