@@ -383,10 +383,42 @@ app.post('/api/write', async (req, res, next) => {
     }
 
     try {
-        await fs.writeFile(path.join(savePath, filePath), fileContent);
-        res.send({
-            success: true
-        });
+        // Check if this is a chunked upload
+        const chunkIndex = req.headers['chunk-index'];
+        const totalChunks = req.headers['total-chunks'];
+
+        if (chunkIndex !== undefined && totalChunks !== undefined) {
+            // Chunked upload mode
+            const index = parseInt(chunkIndex);
+            const total = parseInt(totalChunks);
+            const tempPath = path.join(savePath, filePath + '.tmp');
+            const finalPath = path.join(savePath, filePath);
+
+            // If this is the first chunk, delete any existing temp file
+            if (index === 0 && existsSync(tempPath)) {
+                await fs.unlink(tempPath);
+            }
+
+            // Append chunk to temporary file
+            await fs.appendFile(tempPath, fileContent);
+
+            // If this is the last chunk, rename to final file
+            if (index === total - 1) {
+                await fs.rename(tempPath, finalPath);
+            }
+
+            res.send({
+                success: true,
+                chunk: index,
+                total: total
+            });
+        } else {
+            // Regular single upload (backward compatibility)
+            await fs.writeFile(path.join(savePath, filePath), fileContent);
+            res.send({
+                success: true
+            });
+        }
     } catch (error) {
         next(error);
     }
