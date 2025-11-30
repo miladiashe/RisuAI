@@ -27,7 +27,7 @@ services:
     volumes:
       - risuai-save:/data:ro  # 백업할 데이터 (읽기 전용)
       - ./backup:/backup-repo  # 백업 저장소 위치
-      - ./restic-password.txt:/run/secrets/restic_password:ro  # 암호화 비밀번호
+      - ../restic-password.txt:/run/secrets/restic_password:ro  # 암호화 비밀번호 (RisuAI 폴더 바깥)
     depends_on:
       - risuai
 
