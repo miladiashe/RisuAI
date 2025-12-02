@@ -114,6 +114,8 @@ export async function syncDrive() {
 
 
 async function backupDrive(ACCESS_TOKEN:string) {
+    const PARALLEL_UPLOADS = 20
+
     alertStore.set({
         type: "wait",
         msg: "Uploading Backup..."
@@ -138,42 +140,73 @@ async function backupDrive(ACCESS_TOKEN:string) {
         return d.name
     })
 
+    // Build upload list
+    type UploadItem = { key: string, formatedKey: string, fromTauri: boolean }
+    const toUpload: UploadItem[] = []
+
     if(isTauri){
         const assets = await readDir('assets', {baseDir: BaseDirectory.AppData})
-        let i = 0;
-        for(let asset of assets){
-            i += 1;
-            alertStore.set({
-                type: "wait",
-                msg: `Uploading Backup... (${i} / ${assets.length})`
-            })
+        for(const asset of assets){
             const key = asset.name
             if(!key || !key.endsWith('.png')){
                 continue
             }
             const formatedKey = newFormatKeys(key)
             if(!fileNames.includes(formatedKey)){
-                await createFileInFolder(ACCESS_TOKEN, formatedKey, await readFile('assets/' + asset.name, {baseDir: BaseDirectory.AppData}))
+                toUpload.push({ key: 'assets/' + key, formatedKey, fromTauri: true })
             }
         }
     }
     else{
         const keys = await forageStorage.keys()
-
-        for(let i=0;i<keys.length;i++){
-            alertStore.set({
-                type: "wait",
-                msg: `Uploading Backup... (${i} / ${keys.length})`
-            })
-            const key = keys[i]
+        for(const key of keys){
             if(!key.endsWith('.png')){
                 continue
             }
             const formatedKey = newFormatKeys(key)
             if(!fileNames.includes(formatedKey)){
-                await createFileInFolder(ACCESS_TOKEN, formatedKey, await forageStorage.getItem(key) as unknown as Uint8Array)
+                toUpload.push({ key, formatedKey, fromTauri: false })
             }
         }
+    }
+
+    // Parallel upload with sliding window
+    let currentIndex = 0
+    let uploadedCount = 0
+    const totalCount = toUpload.length
+
+    async function uploadOne(): Promise<void> {
+        if (currentIndex >= toUpload.length) return
+
+        const item = toUpload[currentIndex++]
+        try {
+            let data: Uint8Array
+            if (item.fromTauri) {
+                data = await readFile(item.key, {baseDir: BaseDirectory.AppData})
+            } else {
+                data = await forageStorage.getItem(item.key) as unknown as Uint8Array
+            }
+
+            if (data && data.byteLength > 0) {
+                await createFileInFolder(ACCESS_TOKEN, item.formatedKey, data)
+            }
+            uploadedCount++
+            alertStore.set({
+                type: "wait",
+                msg: `Uploading Backup... (${uploadedCount} / ${totalCount})`
+            })
+        } catch (e) {
+            console.error(`Failed to upload: ${item.key}`, e)
+        }
+
+        await uploadOne() // Process next item
+    }
+
+    // Start parallel uploads
+    if (toUpload.length > 0) {
+        await Promise.all(
+            Array.from({ length: Math.min(PARALLEL_UPLOADS, toUpload.length) }, () => uploadOne())
+        )
     }
 
     const dbData = encodeRisuSaveLegacy(getDatabase(), 'compression')
@@ -295,55 +328,78 @@ async function loadDrive(ACCESS_TOKEN:string, mode: 'backup'|'sync'):Promise<voi
         lastSaved = Date.now()
         localStorage.setItem('risu_lastsaved', `${lastSaved}`)
         const requiredImages = (getUnpargeables(db))
-        let ind = 0;
-        let errorLogs:string[] = []
-        for(const images of requiredImages){
-            ind += 1
-            for(let tries=0;tries<3;tries++){
-                const formatedImage = tries === 0 ? newFormatKeys(images) : formatKeys(images)
-                if(mode === 'sync'){
-                    alertStore.set({
-                        type: "wait",
-                        msg: `Sync Files... (${ind} / ${requiredImages.length})`
-                    })
-                }
-                else{
-                    alertStore.set({
-                        type: "wait",
-                        msg: `Loading Backup... (${ind} / ${requiredImages.length})`
-                    })
-                }
-                if(await checkImageExists(images)){
-                    //skip process
-                }
-                else{
-                    if(formatedImage.length >= 7){
-                        if(fileNames.includes(formatedImage)){
-                            for(const file of files){
-                                if(file.name === formatedImage){
-                                    const fData = await getFileData(ACCESS_TOKEN, file.id)
-                                    if(isTauri){
-                                        await writeFile(`assets/` + images, fData ,{baseDir: BaseDirectory.AppData})
-        
-                                    }
-                                    else{
-                                        await forageStorage.setItem('assets/' + images, fData)
-                                    }
-                                    tries = 3
-                                }
-                            }
-                        }
-                        else{
-                            alertStore.set({
-                                type: "wait",
-                                msg: `Loading Backup... (${ind} / ${requiredImages.length}) (Error in ${formatedImage})`
-                            })
-                            await sleep(1000)
-                        }
-                    }
-                }
+
+        // Build download list
+        type DownloadItem = { images: string, fileId: string }
+        const toDownload: DownloadItem[] = []
+
+        // Pre-load foragekeys for checking existing images
+        if (!isTauri && !loadedForageKeys) {
+            foragekeys = await forageStorage.keys()
+            loadedForageKeys = true
+        }
+
+        for (const images of requiredImages) {
+            // Check if image already exists locally
+            const imageExists = await checkImageExists(images)
+            if (imageExists) continue
+
+            // Try new format first, then old format
+            const newFormat = newFormatKeys(images)
+            const oldFormat = formatKeys(images)
+
+            let fileId: string | null = null
+            if (newFormat.length >= 7 && fileNames.includes(newFormat)) {
+                const file = files.find(f => f.name === newFormat)
+                if (file) fileId = file.id
+            } else if (oldFormat.length >= 7 && fileNames.includes(oldFormat)) {
+                const file = files.find(f => f.name === oldFormat)
+                if (file) fileId = file.id
+            }
+
+            if (fileId) {
+                toDownload.push({ images, fileId })
             }
         }
+
+        // Parallel download with sliding window
+        const PARALLEL_DOWNLOADS = 20
+        let currentIndex = 0
+        let downloadedCount = 0
+        const totalCount = toDownload.length
+
+        async function downloadOne(): Promise<void> {
+            if (currentIndex >= toDownload.length) return
+
+            const item = toDownload[currentIndex++]
+            try {
+                const fData = await getFileData(ACCESS_TOKEN, item.fileId)
+                if (isTauri) {
+                    await writeFile(`assets/` + item.images, fData, {baseDir: BaseDirectory.AppData})
+                } else {
+                    await forageStorage.setItem('assets/' + item.images, fData)
+                }
+                downloadedCount++
+                alertStore.set({
+                    type: "wait",
+                    msg: mode === 'sync'
+                        ? `Sync Files... (${downloadedCount} / ${totalCount})`
+                        : `Loading Backup... (${downloadedCount} / ${totalCount})`
+                })
+            } catch (e) {
+                console.error(`Failed to download: ${item.images}`, e)
+            }
+
+            await downloadOne() // Process next item
+        }
+
+        // Start parallel downloads
+        if (toDownload.length > 0) {
+            await Promise.all(
+                Array.from({ length: Math.min(PARALLEL_DOWNLOADS, toDownload.length) }, () => downloadOne())
+            )
+        }
+
         db.didFirstSetup = true
         const dbData = encodeRisuSaveLegacy(db, 'compression')
 
