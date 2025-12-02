@@ -1,5 +1,6 @@
 import { language } from "src/lang"
 import { alertInput } from "../alert"
+import { saving } from "../globalApi.svelte"
 
 let auth:string = null
 let authChecked = false
@@ -15,6 +16,10 @@ export class NodeStorage{
         // If file is larger than 100MB, use chunked upload
         if (value.byteLength > CHUNK_THRESHOLD) {
             const totalChunks = Math.ceil(value.byteLength / CHUNK_SIZE);
+
+            // Update progress tracking
+            saving.progress.current = 0;
+            saving.progress.total = totalChunks;
 
             for (let i = 0; i < totalChunks; i++) {
                 const start = i * CHUNK_SIZE;
@@ -40,6 +45,8 @@ export class NodeStorage{
                         if(da.status >= 200 && da.status < 300){
                             const data = await da.json()
                             if(!data.error){
+                                // Update progress
+                                saving.progress.current = i + 1;
                                 break; // Success, move to next chunk
                             }
                         }
@@ -47,6 +54,9 @@ export class NodeStorage{
                         // Failed, check if we should retry
                         trys += 1;
                         if (trys > MAX_RETRIES) {
+                            // Reset progress on failure
+                            saving.progress.current = 0;
+                            saving.progress.total = 0;
                             throw "setItem Error (chunk " + i + " failed after " + MAX_RETRIES + " retries)"
                         }
 
@@ -55,6 +65,9 @@ export class NodeStorage{
                     } catch (error) {
                         trys += 1;
                         if (trys > MAX_RETRIES) {
+                            // Reset progress on failure
+                            saving.progress.current = 0;
+                            saving.progress.total = 0;
                             throw "setItem Error (chunk " + i + "): " + error
                         }
                         // Wait before retry (exponential backoff)
@@ -62,6 +75,10 @@ export class NodeStorage{
                     }
                 }
             }
+
+            // Reset progress after completion
+            saving.progress.current = 0;
+            saving.progress.total = 0;
         } else {
             // Regular single upload for files under 100MB with retry logic
             let trys = 0;

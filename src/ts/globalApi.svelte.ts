@@ -314,7 +314,11 @@ export async function loadAsset(id:string){
 
 let lastSave = ''
 export let saving = $state({
-    state: false
+    state: false,
+    progress: {
+        current: 0,
+        total: 0
+    }
 })
 
 /**
@@ -377,6 +381,10 @@ export async function saveDb(){
             }
             saveTimeout = setTimeout(() => {
                 changed = true;
+                if(saving.state) {
+                    // Only track version during save
+                    changeVersionDuringSave++;
+                }
             }, debounceTime);
         }
 
@@ -420,6 +428,7 @@ export async function saveDb(){
 
     let savetrys = 0
     let lastDbData = new Uint8Array(0)
+    let changeVersionDuringSave = 0  // Track changes during save only
     await sleep(1000)
     while(true){
         if(!changed){
@@ -427,8 +436,9 @@ export async function saveDb(){
             continue
         }
 
-        saving.state = true
         changed = false
+        changeVersionDuringSave = 0  // Reset at start of save
+        saving.state = true
         try {
 
             if(requiresFullEncoderReload.state){
@@ -479,7 +489,7 @@ export async function saveDb(){
             if(!forageStorage.isAccount){
                 await getDbBackups()
             }
-            savetrys = 0            
+            savetrys = 0
             await saveDbKei()
             await sleep(500)
         } catch (error) {
@@ -493,6 +503,9 @@ export async function saveDb(){
         }
 
         saving.state = false
+
+        // Additional wait to prevent rapid re-saves
+        await sleep(1000)
     }
 }
 

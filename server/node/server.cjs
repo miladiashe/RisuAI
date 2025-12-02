@@ -329,7 +329,12 @@ app.get('/api/remove', async (req, res, next) => {
     }
 
     try {
-        await fs.rm(path.join(savePath, filePath));
+        const fullPath = path.join(savePath, filePath);
+        // Check if file exists before trying to delete
+        if (existsSync(fullPath)) {
+            await fs.rm(fullPath);
+        }
+        // Return success even if file doesn't exist (idempotent delete)
         res.send({
             success: true,
         });
@@ -394,8 +399,11 @@ app.post('/api/write', async (req, res, next) => {
             const tempPath = path.join(savePath, filePath + '.tmp');
             const finalPath = path.join(savePath, filePath);
 
+            console.log(`[Chunk Upload] Receiving chunk ${index + 1}/${total} (${(fileContent.length / 1024 / 1024).toFixed(2)} MB)`);
+
             // If this is the first chunk, delete any existing temp file
             if (index === 0 && existsSync(tempPath)) {
+                console.log(`[Chunk Upload] Cleaning existing temp file`);
                 await fs.unlink(tempPath);
             }
 
@@ -404,7 +412,9 @@ app.post('/api/write', async (req, res, next) => {
 
             // If this is the last chunk, rename to final file
             if (index === total - 1) {
+                console.log(`[Chunk Upload] Complete! Finalizing file...`);
                 await fs.rename(tempPath, finalPath);
+                console.log(`[Chunk Upload] File saved successfully`);
             }
 
             res.send({
