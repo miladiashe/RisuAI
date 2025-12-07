@@ -411,7 +411,8 @@ export async function requestChatData(arg:requestDataArgument, model:ModelModeEx
             }
             
             trys += 1
-            if(trys > db.requestRetrys){
+            const maxRetrys = model === 'translate' ? db.translatorRequestRetrys : db.requestRetrys
+            if(trys > maxRetrys){
                 if(fallbackIndex === fallBackModels.length-1 || da.model === 'custom'){
                     return da
                 }

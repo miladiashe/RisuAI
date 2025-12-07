@@ -550,6 +550,7 @@ export const languageChinese = {
     "usePlainFetchWarn": "使用 NovelAI 时请关闭此选项，避免出现 CORS 错误。",
     "translationPrompt": "翻译提示词",
     "translationResponseSize": "翻译回应长度",
+    "translatorRequestRetrys": "翻译重试次数",
     "webdeeplwarn": "此功能不不建议于网页版使用，避免出现 CORS 错误。",
     "saveBackupLocal": "本地保存备份",
     "loadBackupLocal": "本机读取备份",

@@ -512,6 +512,7 @@ export const languageSpanish = {
     usePlainFetchWarn: "Desactiva esta opción cuando uses NovelAI, ya que puede causar errores de CORS al usar NovelAI.",
     translationPrompt: "Prompt de Traducción",
     translationResponseSize: "Tamaño de Respuesta de Traducción",
+    translatorRequestRetrys: "Reintentos de Traducción",
     webdeeplwarn: "Esta opción no se recomienda para su uso con la versión web, ya que puede causar errores de CORS.",
     saveBackupLocal: "Guardar Respaldo Localmente",
     loadBackupLocal: "Cargar Respaldo Localmente",
