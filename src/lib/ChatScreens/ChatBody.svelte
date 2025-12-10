@@ -20,6 +20,7 @@
         translating: boolean
         retranslate: boolean
         bodyRoot?: HTMLElement|null
+        translationCacheKey?: string
     }
 
     let {
@@ -31,7 +32,8 @@
         translated = $bindable(false),
         translating = $bindable(false),
         retranslate = $bindable(false),
-        bodyRoot
+        bodyRoot,
+        translationCacheKey = $bindable('')
     }: Props =  $props()
 
     // svelte-ignore non_reactive_update
@@ -108,6 +110,7 @@
                 if(DBState.db.translatorType === 'llm' && DBState.db.translateBeforeHTMLFormatting){
                     await sleep(100)
                     translating = true
+                    translationCacheKey = data  // 캐시 키 저장
                     data = await translateHTML(data, false, charArg, chatID, retranslate)
                     translating = false
                     const marked = await ParseMarkdown(data, charArg, mode, chatID, getCbsCondition())
@@ -118,6 +121,7 @@
                 else if(!DBState.db.legacyTranslation){
                     const marked = await ParseMarkdown(data, charArg, 'pretranslate', chatID, getCbsCondition())
                     translating = true
+                    translationCacheKey = marked  // 캐시 키 저장
                     const translated = await postTranslationParse(await translateHTML(marked, false, charArg, chatID, retranslate))
                     translating = false
                     lastParsedQueue = translated
@@ -127,6 +131,7 @@
                 else{
                     const marked = await ParseMarkdown(data, charArg, mode, chatID, getCbsCondition())
                     translating = true
+                    translationCacheKey = marked  // 캐시 키 저장
                     const translated = await translateHTML(marked, false, charArg, chatID, retranslate)
                     translating = false
                     lastParsedQueue = translated
