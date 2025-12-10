@@ -572,3 +572,11 @@ async function translateLLM(text:string, arg:{to:string, from:string, regenerate
 export async function getLLMCache(text:string):Promise<string | null>{
     return await LLMCacheStorage.getItem(text)
 }
+
+export async function setLLMCache(originalText:string, translatedText:string):Promise<void>{
+    await LLMCacheStorage.setItem(originalText, translatedText)
+}
+
+export async function deleteLLMCache(originalText:string):Promise<void>{
+    await LLMCacheStorage.removeItem(originalText)
+}

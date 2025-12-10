@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { ArrowLeft, ArrowLeftRightIcon, ArrowRight, BotIcon, CopyIcon, LanguagesIcon, PencilIcon, RefreshCcwIcon, TrashIcon, UserIcon, Volume2Icon } from "lucide-svelte"
+    import { ArrowLeft, ArrowLeftRightIcon, ArrowRight, BotIcon, CopyIcon, LanguagesIcon, PencilIcon, PencilLineIcon, RefreshCcwIcon, TrashIcon, UserIcon, Volume2Icon, XIcon, CheckIcon } from "lucide-svelte"
     import { getFileSrc } from "src/ts/globalApi.svelte"
     import { ColorSchemeTypeStore } from "src/ts/gui/colorscheme"
     import { longpress } from "src/ts/gui/longtouch"
@@ -21,12 +21,18 @@
     import { HideIconStore, ReloadGUIPointer, selIdState } from "../../ts/stores.svelte"
     import AutoresizeArea from "../UI/GUI/TextAreaResizable.svelte"
     import ChatBody from './ChatBody.svelte'
+    import { setLLMCache } from "../../ts/translator/translator"
 
     let translating = $state(false)
     let editMode = $state(false)
     let statusMessage:string = $state('')
     let retranslate = $state(false)
     let bodyRoot:HTMLElement|null = $state(null)
+
+    // 번역 편집 관련 상태
+    let translationEditMode = $state(false)
+    let editingTranslation = $state('')
+    let translationCacheKey = $state('')  // ChatBody에서 전달받는 캐시 키
     interface Props {
         message?: string;
         name?: string;
@@ -131,6 +137,39 @@
         }, timeout)
     }
 
+    // 번역 편집 시작
+    function startTranslationEdit() {
+        if (!bodyRoot) return
+        if (!translationCacheKey) return  // 캐시 키가 없으면 편집 불가
+
+        // 현재 번역된 텍스트 가져오기
+        const translatedContent = bodyRoot.innerText || bodyRoot.textContent || ''
+        editingTranslation = translatedContent
+
+        translationEditMode = true
+    }
+
+    // 번역 저장
+    async function saveTranslationEdit() {
+        if (!translationCacheKey) return
+
+        try {
+            await setLLMCache(translationCacheKey, editingTranslation)
+            setStatusMessage(language.translationSaved, 2000)
+            translationEditMode = false
+
+            // 화면 갱신을 위해 retranslate 트리거
+            retranslate = true
+        } catch (error) {
+            console.error('Failed to save translation:', error)
+        }
+    }
+
+    // 번역 편집 취소
+    function cancelTranslationEdit() {
+        translationEditMode = false
+        editingTranslation = ''
+    }
 
     let blankMessage = $state((message === '{{none}}' || message === '{{blank}}' || message === '') && idx === -1)
     $effect.pre(() => {
@@ -224,7 +263,7 @@
         {/if}
         {#if DBState.db.translatorType === 'llm' && translated}
             <button class="text-sm p-1 text-textcolor2 border-darkborderc float-end mr-2 my-1
-                            hover:ring-darkbutton hover:ring rounded-md hover:text-textcolor transition-all flex justify-center items-center" 
+                            hover:ring-darkbutton hover:ring rounded-md hover:text-textcolor transition-all flex justify-center items-center"
                     onclick={() => {
                         retranslate = true
                     }}
@@ -232,6 +271,15 @@
                 <RefreshCcwIcon size={20} />
                 <span class="ml-1">
                     {language.retranslate}
+                </span>
+            </button>
+            <button class="text-sm p-1 text-textcolor2 border-darkborderc float-end mr-2 my-1
+                            hover:ring-darkbutton hover:ring rounded-md hover:text-textcolor transition-all flex justify-center items-center"
+                    onclick={startTranslationEdit}
+            >
+                <PencilLineIcon size={20} />
+                <span class="ml-1">
+                    {language.editTranslation}
                 </span>
             </button>
         {/if}
@@ -243,6 +291,26 @@
         <AutoresizeArea bind:value={message} handleLongPress={() => {
             editMode = false
         }} />
+    {:else if translationEditMode}
+        <div class="w-full flex flex-col gap-2">
+            <AutoresizeArea bind:value={editingTranslation} />
+            <div class="flex gap-2 justify-end">
+                <button
+                    class="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded-md flex items-center gap-1 transition-colors"
+                    onclick={saveTranslationEdit}
+                >
+                    <CheckIcon size={16} />
+                    {language.saveTranslation}
+                </button>
+                <button
+                    class="px-3 py-1 bg-gray-600 hover:bg-gray-700 text-white rounded-md flex items-center gap-1 transition-colors"
+                    onclick={cancelTranslationEdit}
+                >
+                    <XIcon size={16} />
+                    {language.cancelEdit}
+                </button>
+            </div>
+        </div>
     {:else if blankMessage}
         <div class="w-full flex justify-center text-textcolor2 italic mb-12">
             {language.noMessage}
@@ -274,7 +342,8 @@
                     role={role ?? null}
                     bind:translated={translated}
                     bind:translating={translating}
-                    bind:retranslate={retranslate} />
+                    bind:retranslate={retranslate}
+                    bind:translationCacheKey={translationCacheKey} />
             {/key}
         </span>
     {/if}
