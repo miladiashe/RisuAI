@@ -776,9 +776,6 @@ export const languageChinese = {
     "translatorPrompt": "翻译提示词",
     "translateBeforeHTMLFormatting": "於 HTML 格式化前翻译",
     "retranslate": "重新翻译",
-    "editTranslation": "编辑翻译",
-    "saveTranslation": "保存",
-    "cancelEdit": "取消",
     "translationSaved": "翻译已保存",
     "loading": "加载中",
     "hypaV3Settings": {

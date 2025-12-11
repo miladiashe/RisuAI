@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { ArrowLeft, ArrowLeftRightIcon, ArrowRight, BotIcon, CopyIcon, LanguagesIcon, PencilIcon, PencilLineIcon, RefreshCcwIcon, TrashIcon, UserIcon, Volume2Icon, XIcon, CheckIcon } from "lucide-svelte"
+    import { ArrowLeft, ArrowLeftRightIcon, ArrowRight, BotIcon, CopyIcon, LanguagesIcon, PencilIcon, RefreshCcwIcon, TrashIcon, UserIcon, Volume2Icon, XIcon, CheckIcon } from "lucide-svelte"
     import { getFileSrc } from "src/ts/globalApi.svelte"
     import { ColorSchemeTypeStore } from "src/ts/gui/colorscheme"
     import { longpress } from "src/ts/gui/longtouch"
@@ -274,15 +274,6 @@
                 <RefreshCcwIcon size={20} />
                 <span class="ml-1">
                     {language.retranslate}
-                </span>
-            </button>
-            <button class="text-sm p-1 text-textcolor2 border-darkborderc float-end mr-2 my-1
-                            hover:ring-darkbutton hover:ring rounded-md hover:text-textcolor transition-all flex justify-center items-center"
-                    onclick={startTranslationEdit}
-            >
-                <PencilLineIcon size={20} />
-                <span class="ml-1">
-                    {language.editTranslation}
                 </span>
             </button>
         {/if}
@@ -592,13 +583,23 @@
             {/if}
 
             {#if !$ConnectionOpenStore}
-                <button class={"ml-2 hover:text-blue-500 transition-colors button-icon-edit "+(editMode?'text-blue-400':'')} onclick={() => {
-                    if(!editMode){
-                        editMode = true
-                    }
-                    else{
-                        editMode = false
-                        edit()
+                <button class={"ml-2 hover:text-blue-500 transition-colors button-icon-edit "+((editMode || translationEditMode)?'text-blue-400':'')} onclick={() => {
+                    // 번역 상태이고 LLM 번역일 때는 번역 수정 모드
+                    if (translated && DBState.db.translatorType === 'llm' && translationCacheKey) {
+                        if (!translationEditMode) {
+                            startTranslationEdit()
+                        } else {
+                            saveTranslationEdit()
+                        }
+                    } else {
+                        // 일반 메시지 수정 모드
+                        if(!editMode){
+                            editMode = true
+                        }
+                        else{
+                            editMode = false
+                            edit()
+                        }
                     }
                 }}>
                     <PencilIcon size={20}/>
