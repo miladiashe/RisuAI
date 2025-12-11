@@ -158,8 +158,11 @@
             setStatusMessage(language.translationSaved, 2000)
             translationEditMode = false
 
-            // 화면 갱신을 위해 retranslate 트리거
-            retranslate = true
+            // 화면 갱신을 위해 ReloadChatPointer 업데이트
+            ReloadChatPointer.update(v => {
+                v[idx] = (v[idx] ?? 0) + 1
+                return v
+            })
         } catch (error) {
             console.error('Failed to save translation:', error)
         }
