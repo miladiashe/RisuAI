@@ -52,3 +52,8 @@ backup-now.sh
 
 # Due to Cargo.lock makes the project build fail, we ignore it
 Cargo.lock
+/backup
+backup-init.sh
+backup-now.sh
+docker-compose.yml
+restic-password.txt
