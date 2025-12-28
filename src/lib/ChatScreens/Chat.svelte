@@ -21,7 +21,7 @@
     import { HideIconStore, ReloadGUIPointer, selIdState } from "../../ts/stores.svelte"
     import AutoresizeArea from "../UI/GUI/TextAreaResizable.svelte"
     import ChatBody from './ChatBody.svelte'
-    import { setLLMCache } from "../../ts/translator/translator"
+    import { getLLMCache, setLLMCache } from "../../ts/translator/translator"
 
     let translating = $state(false)
     let editMode = $state(false)
@@ -138,13 +138,18 @@
     }
 
     // 번역 편집 시작
-    function startTranslationEdit() {
+    async function startTranslationEdit() {
         if (!bodyRoot) return
         if (!translationCacheKey) return  // 캐시 키가 없으면 편집 불가
 
-        // 현재 번역된 텍스트 가져오기
-        const translatedContent = bodyRoot.innerText || bodyRoot.textContent || ''
-        editingTranslation = translatedContent
+        // 캐시에서 번역된 텍스트 가져오기 (HTML 태그 보존)
+        const cachedTranslation = await getLLMCache(translationCacheKey)
+        if (cachedTranslation) {
+            editingTranslation = cachedTranslation
+        } else {
+            // 캐시가 없으면 DOM에서 텍스트 가져오기 (fallback)
+            editingTranslation = bodyRoot.innerText || bodyRoot.textContent || ''
+        }
 
         translationEditMode = true
     }
