@@ -1,18 +1,18 @@
 <script lang="ts">
-    import { PlusIcon, TrashIcon, LinkIcon, Code2Icon } from "@lucide/svelte";
+    import { PlusIcon, TrashIcon, LinkIcon, CodeXmlIcon, PowerIcon, PowerOffIcon } from "@lucide/svelte";
     import { language } from "src/lang";
-    import { alertConfirm, alertMd } from "src/ts/alert";
-    import { AlertTriangle } from '@lucide/svelte';
+    import { alertConfirm, alertMd, alertSelect } from "src/ts/alert";
+    import { TriangleAlert } from '@lucide/svelte';
 
-    import { DBState } from "src/ts/stores.svelte";
+    import { DBState, hotReloading } from "src/ts/stores.svelte";
     import { checkPluginUpdate, createBlankPlugin, importPlugin, loadPlugins, updatePlugin } from "src/ts/plugins/plugins";
     import TextInput from "src/lib/UI/GUI/TextInput.svelte";
     import NumberInput from "src/lib/UI/GUI/NumberInput.svelte";
     import SelectInput from "src/lib/UI/GUI/SelectInput.svelte";
     import OptionInput from "src/lib/UI/GUI/OptionInput.svelte";
-    import migrationGuideContent from "src/ts/plugins/migrationGuide.md?raw";
     import CheckInput from "src/lib/UI/GUI/CheckInput.svelte";
     import TextAreaInput from "src/lib/UI/GUI/TextAreaInput.svelte";
+    import { hotReloadPluginFiles } from "src/ts/plugins/apiV3/developMode";
 
     let showParams = $state([])
 </script>
@@ -40,12 +40,21 @@
                 showParams.push(i)
             }
         }}>
-            <span class="font-bold grow">{plugin.displayName ?? plugin.name}</span>
-            {#if plugin.version === 2}
+            <div class="font-bold grow">
+                <span>
+                    {plugin.displayName ?? plugin.name}
+                </span>
+                {#if hotReloading.includes(plugin.name)}
+                    <span class="text-sm rounded bg-amber-700 ml-2 px-2 py-1 text-white">
+                        Hot
+                    </span>
+                {/if}
+            </div>
+            {#if plugin.version === 2 || plugin.version === "2.1"}
                 <button class="text-yellow-400 hover:gray-200 cursor-pointer" onclick={() => {
-                    alertMd(migrationGuideContent);
+                    alertMd(language.pluginV2Warning);
                 }} >
-                    <AlertTriangle />
+                    <TriangleAlert />
                 </button>
             {/if}
 
@@ -84,6 +93,22 @@
                     {/if}
                 {/await}
             {/if}
+
+            <button
+                class="textcolor2 hover:gray-200 cursor-pointer"
+                onclick={async (e) => {
+                    plugin.enabled = !plugin.enabled
+                    DBState.db.plugins[i] = plugin
+                    loadPlugins()
+                    e.preventDefault()
+                }}
+            >
+                {#if plugin.enabled}
+                    <PowerIcon />
+                {:else}
+                    <PowerOffIcon />
+                {/if}
+            </button>
 
             <!--Also, remove button.-->
             <button
@@ -227,11 +252,26 @@
     </button>
 
     <button
-        onclick={() => {
-            createBlankPlugin();
+        onclick={async () => {
+            const v = parseInt(await alertSelect([
+                "Import plugin with hot reload",
+                "Download plugin template",
+                language.cancel
+            ]))
+            switch(v){
+                case 0:
+                    await hotReloadPluginFiles()
+                    break;
+                case 1:{
+                    const a = document.createElement('a');
+                    a.href = '/plugin_start.7z';
+                    a.download = 'plugin_starter.7z';
+                    document.body.appendChild(a);
+                }
+            }
         }}
         class="hover:text-textcolor cursor-pointer"
     >
-        <Code2Icon />
+        <CodeXmlIcon />
     </button>
 </div>

@@ -1,6 +1,7 @@
 import { alertError, alertInput, alertNormal, alertSelect, alertStore } from "../alert";
 import { getDatabase, type Database } from "../storage/database.svelte";
-import { forageStorage, getUnpargeables, isTauri, openURL } from "../globalApi.svelte";
+import { forageStorage, getUnpargeables, openURL } from "../globalApi.svelte";
+import { isTauri } from "src/ts/platform"
 import { BaseDirectory, exists, readFile, readDir, writeFile } from "@tauri-apps/plugin-fs";
 import { language } from "../../lang";
 import { relaunch } from '@tauri-apps/plugin-process';
@@ -107,7 +108,7 @@ let lastSaved:number = parseInt(localStorage.getItem('risu_lastsaved') ?? '-1')
 let BackupDb:Database = null
 
 
-export async function syncDrive() {
+export function syncDrive() {
     BackupDb = safeStructuredClone(getDatabase())
     return
 }
@@ -118,19 +119,6 @@ async function backupDrive(ACCESS_TOKEN:string) {
         type: "wait",
         msg: "Uploading Backup..."
     })
-
-    //check backup data is corrupted
-    const corrupted = await fetch(hubURL + '/backupcheck', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(getDatabase()),
-    })
-    if(corrupted.status === 400){
-        alertError('Failed, Backup data is corrupted')
-        return
-    }
 
     const files:DriveFile[] = await getFilesInFolder(ACCESS_TOKEN)
 

@@ -1,6 +1,8 @@
 import { BaseDirectory, readFile, readDir, writeFile } from "@tauri-apps/plugin-fs";
+import localforage from "localforage";
 import { alertError, alertNormal, alertStore, alertWait, alertMd } from "../alert";
-import { LocalWriter, forageStorage, isTauri, requiresFullEncoderReload } from "../globalApi.svelte";
+import { LocalWriter, forageStorage, requiresFullEncoderReload } from "../globalApi.svelte";
+import { isTauri } from "src/ts/platform"
 import { decodeRisuSave, encodeRisuSaveLegacy } from "../storage/risuSave";
 import { getDatabase, setDatabaseLite } from "../storage/database.svelte";
 import { relaunch } from "@tauri-apps/plugin-process";
@@ -20,19 +22,6 @@ export async function SaveLocalBackup(){
     const r = await writer.init()
     if(!r){
         alertError('Failed')
-        return
-    }
-
-    //check backup data is corrupted
-    const corrupted = await fetch(hubURL + '/backupcheck', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(getDatabase()),
-    })
-    if(corrupted.status === 400){
-        alertError('Failed, Backup data is corrupted')
         return
     }
 
@@ -124,13 +113,26 @@ export async function SaveLocalBackup(){
             if(!key || !key.endsWith('.png')){
                 continue
             }
-            const data = await forageStorage.getItem(key) as unknown as Uint8Array
+            let data: Uint8Array | undefined;
+            let isCached = false;
+            if(forageStorage.isAccount && key.startsWith('assets/')){
+                const cached = await localforage.getItem(key) as ArrayBuffer;
+                if(cached) {
+                    isCached = true;
+                    data = new Uint8Array(cached);
+                }
+            }
+            
+            if (!data) {
+                data = await forageStorage.getItem(key) as unknown as Uint8Array
+            }
+
             if (data) {
                 await writer.writeBackup(key, data)
             } else {
                 missingAssets.push(key)
             }
-            if(forageStorage.isAccount){
+            if(forageStorage.isAccount && !isCached){
                 await sleep(1000)
             }
         }
@@ -159,7 +161,7 @@ export async function SaveLocalBackup(){
     }
 }
 
-export async function LoadLocalBackup(){
+export function LoadLocalBackup(){
     try {
         const input = document.createElement('input');
         input.type = 'file';

@@ -6,6 +6,17 @@
  */
 
 import type { Database } from '../storage/database.svelte';
+import type { CustomComponentId, CustomComponentProps } from './customComponents';
+import type { LLMModel } from '../model/types';
+
+/**
+ * Context passed to condition functions for visibility checks
+ */
+export interface SettingContext {
+    db: Database;
+    modelInfo: LLMModel;
+    subModelInfo: LLMModel;
+}
 
 /**
  * Supported setting input types
@@ -19,7 +30,9 @@ export type SettingType =
     | 'select'     // Dropdown (SelectInput)
     | 'color'      // Color picker (ColorInput)
     | 'header'     // Section header (h2, span, warning)
-    | 'button';    // Action button (Button)
+    | 'button'     // Action button (Button)
+    | 'accordion'  // Collapsible section (Accordion)
+    | 'custom';    // Custom component from registry
 
 /**
  * Select option for dropdown
@@ -54,6 +67,10 @@ export interface SettingOptions {
     
     // header
     level?: 'h2' | 'span' | 'warning';
+    
+    // accordion
+    styled?: boolean;        // Use styled accordion
+    children?: SettingItem[]; // Nested items inside accordion
 }
 
 /**
@@ -72,8 +89,14 @@ export interface SettingItem {
     /** Fallback label if language key doesn't exist */
     fallbackLabel?: string;
     
-    /** Help tooltip key */
+    /** Key for help tooltip lookup in language.help */
     helpKey?: string;
+
+    /** If true, the help icon will show as unrecommended (triangle warning icon) */
+    helpUnrecommended?: boolean;
+
+    /** If true, shows an additional experimental marker (flask icon) */
+    showExperimental?: boolean;
     
     /** 
      * Database key for binding (DBState.db.xxx)
@@ -82,16 +105,38 @@ export interface SettingItem {
     bindKey?: keyof Database;
     
     /**
+     * Path for nested object binding (e.g., 'ooba.top_p')
+     * Use when binding to nested properties like DBState.db.ooba.top_p
+     * Takes precedence over bindKey if both are specified
+     */
+    bindPath?: string;
+    
+    /**
      * Condition function for visibility
      * Return true to show, false to hide
+     * @param ctx - Contains db, modelInfo, and subModelInfo
      */
-    condition?: (db: Database) => boolean;
+    condition?: (ctx: SettingContext) => boolean;
     
     /** Type-specific options */
     options?: SettingOptions;
     
     /** Search keywords for future search feature */
     keywords?: string[];
+
+    /** Custom CSS classes for the main container or label */
+    classes?: string;
+        
+    /**
+     * Component ID for custom components (type: 'custom')
+     * Must be a key in customComponents registry
+     */
+    componentId?: CustomComponentId;
+    
+    /**
+     * Props to pass to custom component
+     */
+    componentProps?: CustomComponentProps;
 }
 
 /**

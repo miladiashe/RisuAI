@@ -66,6 +66,8 @@ export type matcherArg = {
     lowLevelAccess?: boolean
     cbsConditions: CbsConditions
     triggerId?: string
+    getNested?: () => string[]
+    setNestedRoot?: (val:string) => void
 }
 "a".toLowerCase().split('::')
 
@@ -1133,7 +1135,7 @@ export function registerCBS(arg:CBSRegisterArg) {
     registerFunction({
         name: 'tonumber',
         callback: (str, matcherArg, args, vars) => {
-            return (args[0].split('').filter((v) => {
+            return ([...args[0]].filter((v) => {
                 return !isNaN(Number(v)) || v === '.'
             })).join('')
         },
@@ -2118,7 +2120,7 @@ export function registerCBS(arg:CBSRegisterArg) {
     registerFunction({
         name: 'reverse',
         callback: (str, matcherArg, args, vars) => {
-            return str.split('').reverse().join('')
+            return [...str].reverse().join('')
         },
         alias: [],
         description: 'Reverses the input string.\n\nUsage:: {{reverse::some_value}}',
@@ -2171,6 +2173,75 @@ export function registerCBS(arg:CBSRegisterArg) {
         },
         alias: [],
         description: 'Formats text as a code block using HTML pre and code tags.\n\nUsage:: {{codeblock::some code here}}, or {{codeblock::language::some code here}} for syntax highlighting.',
+    })
+
+    
+    registerFunction({
+        name: 'bkspc',
+        callback: (str, matcherArg, args, vars) => {
+            let root = matcherArg?.getNested?.()?.[0]
+            if(!root){
+                return ''
+            }
+            root = root.trimEnd()
+
+            let trimPointer = root.length - 1
+
+            for(;trimPointer >= 0;trimPointer--){
+                const char = root[trimPointer]
+                if(trimPointer === 0){
+                    break
+                }
+                if(char === ' ' || char === '\n' || char === '\t'){
+                    break
+                }
+            }
+
+            if(trimPointer === -1){
+                trimPointer = 0
+            }
+            
+            matcherArg?.setNestedRoot(root.substring(0, trimPointer).trimEnd())
+            return ''
+        },
+        alias: [],
+        description: "Performs a backspace operation, removing the last word from the current output. Useful for correcting or modifying generated text dynamically.\n\nUsage:: hello world {{bkspc}} user → hello user",
+    })
+
+    registerFunction({
+        name: 'erase',
+        callback: (str, matcherArg, args, vars) => {
+            let root = matcherArg?.getNested?.()?.[0]
+            if(!root){
+                return ''
+            }
+            root = root.trimEnd()
+
+            let trimPointer = root.length - 1
+            let sentenceEndFound = false
+
+            for(;trimPointer >= 0;trimPointer--){
+                const char = root[trimPointer]
+                if(char === '.' || char === '!' || char === '?' || char === '\n'){
+                    sentenceEndFound = true
+                    break
+                }
+                if(trimPointer === 0){
+                    break
+                }
+            }
+
+            if(trimPointer === -1){
+                trimPointer = 0
+            }
+            else if(sentenceEndFound){
+                trimPointer += 1
+            }
+            matcherArg?.setNestedRoot(root.substring(0, trimPointer).trimEnd())
+            return ''
+        },
+        alias: [],
+        description: "performs a backspace operation, removing the last sentence from the current output. Useful for correcting or modifying generated text dynamically.\n\nUsage:: hello world. what's in {{erase}} what's up → hello world. what's up",
     })
 
     registerFunction({
@@ -2342,10 +2413,10 @@ Advanced operators:
 {{#when::legacy::A}}...{{/when}} - legacy whitespace handling, so it will handle like deprecated #if.
 {{#when::var::A}}...{{/when}} - checks if variable A is truthy.
 {{#when::A::vis::B}}...{{/when}} - checks if variable A is equal to literal B.
-{{#when::A::vnotis::B}}...{{/when}} - checks if variable A is not equal to literal B.
+{{#when::A::visnot::B}}...{{/when}} - checks if variable A is not equal to literal B.
 {{#when::toggle::togglename}}...{{/when}} - checks if toggle is enabled.
 {{#when::A::tis::B}}...{{/when}} - checks if toggle A is equal to literal B.
-{{#when::A::tnotis::B}}...{{/when}} - checks if toggle A is not equal to literal B.
+{{#when::A::tisnot::B}}...{{/when}} - checks if toggle A is not equal to literal B.
 
 operators can be combined like:
 {{#when::keep::not::condition}}...{{/when}}
@@ -2383,10 +2454,15 @@ Usage:: {{#when condition}}...{{/when}} or {{#when::not::condition}}...{{/when}}
     })
 
     registerFunction({
-        name:':each',
+        name:'#each',
         callback: 'doc_only',
-        alias: ['#each'],
-        description: 'Iterates over an array or object.\n\nUsage:: {{#each array}}...{{/each}} or {{#each object as key}}... {{slot::key}}...{{/each}}',
+        alias: [':each'],
+        description: `Iterates over an array.
+
+Operators:
+{{#each::keep A as V}} - keep whitespace handling, so it will not trim spaces inside block.
+
+Usage:: {{#each A as V}} ... {{slot::V}} ... {{/each}}`,
     })
 
     registerFunction({
@@ -2402,6 +2478,4 @@ Usage:: {{#when condition}}...{{/when}} or {{#when::not::condition}}...{{/when}}
         alias: [],
         description: 'Defines the position which can be used in various features such as @@position <positionName> decorator.\n\nUsage:: {{position::positionName}}',
     })
-
-
 }

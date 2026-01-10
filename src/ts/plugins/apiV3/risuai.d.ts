@@ -101,7 +101,7 @@
 /**
  * OpenAI-format chat message
  */
-export interface OpenAIChat {
+interface OpenAIChat {
     role: 'system' | 'user' | 'assistant' | 'function';
     content: string;
     name?: string;
@@ -112,29 +112,37 @@ export interface OpenAIChat {
 }
 
 /**
+ * Returned response for UI part registration
+ */
+
+interface UIPartResponse {
+    id: string;
+}
+
+/**
  * Container display mode
  */
-export type ContainerMode = 'fullscreen';
+type ContainerMode = 'fullscreen';
 
 /**
  * Icon type for UI elements
  */
-export type IconType = 'html' | 'img' | 'none';
+type IconType = 'html' | 'img' | 'none';
 
 /**
  * Script handler mode
  */
-export type ScriptMode = 'display' | 'output' | 'input' | 'process';
+type ScriptMode = 'display' | 'output' | 'input' | 'process';
 
 /**
  * Replacer type
  */
-export type ReplacerType = 'beforeRequest' | 'afterRequest';
+type ReplacerType = 'beforeRequest' | 'afterRequest';
 
 /**
  * Risuai Plugin definition
  */
-export interface RisuPlugin {
+interface RisuPlugin {
     /** Plugin name (identifier) */
     name: string;
     /** Display name shown in UI */
@@ -163,7 +171,7 @@ export interface RisuPlugin {
 /**
  * Risuai Module definition
  */
-export interface RisuModule {
+interface RisuModule {
     /** Module name */
     name: string;
     /** Module description */
@@ -197,7 +205,7 @@ export interface RisuModule {
 /**
  * User persona definition
  */
-export interface Persona {
+interface Persona {
     /** Persona prompt/description */
     personaPrompt: string;
     /** Persona name */
@@ -216,7 +224,7 @@ export interface Persona {
  * Database subset with limited access to allowed keys only.
  * Plugins can only access these specific database properties for security.
  */
-export interface DatabaseSubset {
+interface DatabaseSubset {
     /** Array of characters and group chats */
     characters?: any[];
     /** Risuai modules */
@@ -293,7 +301,7 @@ export interface DatabaseSubset {
  * });
  * ```
  */
-export interface SafeElement {
+interface SafeElement {
     // ========== Element Manipulation ==========
 
     /**
@@ -614,7 +622,7 @@ export interface SafeElement {
      * @param options - Event listener options
      * @returns Unique listener ID for later removal
      *
-     * Allowed events (unlimited):
+     * Allowed events (without delay):
      * - Mouse: click, dblclick, contextmenu, mousedown, mouseup, mousemove, mouseover, mouseleave
      * - Pointer: pointercancel, pointerdown, pointerenter, pointerleave, pointermove, pointerout, pointerover, pointerup
      * - Scroll: scroll, scrollend
@@ -622,6 +630,8 @@ export interface SafeElement {
      * Allowed events (with random delay for anti-fingerprinting):
      * - Keyboard: keydown, keyup, keypress
      *
+     * listener function receives trimmed event object with common properties only.
+     * 
      * @example
      * ```typescript
      * const id = await element.addEventListener('click', async (event) => {
@@ -651,11 +661,10 @@ export interface SafeElement {
     ): Promise<void>;
 
     /**
-     * Unwraps a SafeClassArray into a standard array
-     * @param safeArray - The SafeClassArray to unwrap
-     * @returns Standard array of items
+     * Scrolls the element into view
+     * @param options - Scroll options or boolean for alignment
      */
-    unwarpSafeArray<T>(safeArray: SafeClassArray<T>): Promise<T[]>;
+    scrollIntoView(options?: boolean | ScrollIntoViewOptions): Promise<void>;
 }
 
 // ============================================================================
@@ -683,7 +692,7 @@ export interface SafeElement {
  * const link = doc.createAnchorElement('https://example.com');
  * ```
  */
-export interface SafeDocument extends SafeElement {
+interface SafeDocument extends SafeElement {
     /**
      * Creates an element (limited to whitelisted tags)
      * @param tagName - HTML tag name
@@ -744,7 +753,7 @@ export interface SafeDocument extends SafeElement {
  * 
  * ```
  */
-export interface SafeClassArray<T> {
+interface SafeClassArray<T> {
     /**
      * Gets an item at a specific index
      * @param index - Array index (supports negative indexing)
@@ -772,7 +781,7 @@ export interface SafeClassArray<T> {
 /**
  * Mutation record from SafeMutationObserver
  */
-export interface SafeMutationRecord {
+interface SafeMutationRecord {
     /** Type of mutation */
     getType(): Promise<string>;
     /** Target element of mutation */
@@ -789,7 +798,7 @@ type SafeMutationCallback = (mutations: SafeClassArray<SafeMutationRecord>) => v
 /**
  * SafeMutationObserver watches for DOM changes in the main document
  */
-export interface SafeMutationObserver {
+interface SafeMutationObserver {
     /**
      * Starts observing an element for changes
      * @param element - SafeElement to observe
@@ -821,7 +830,7 @@ export interface SafeMutationObserver {
  * const keys = await risuai.pluginStorage.keys();
  * ```
  */
-export interface PluginStorage {
+interface PluginStorage {
     /**
      * Gets an item from storage
      * @param key - Storage key
@@ -882,7 +891,7 @@ export interface PluginStorage {
  * const deviceId = await risuai.safeLocalStorage.getItem('device_id');
  * ```
  */
-export interface SafeLocalStorage {
+interface SafeLocalStorage {
     getItem(key: string): Promise<string | null>;
     setItem(key: string, value: string): Promise<void>;
     removeItem(key: string): Promise<void>;
@@ -898,7 +907,7 @@ export interface SafeLocalStorage {
 /**
  * Arguments passed to custom AI providers
  */
-export interface ProviderArguments {
+interface ProviderArguments {
     /** Chat message history */
     prompt_chat: OpenAIChat[];
     /** Temperature setting */
@@ -924,7 +933,7 @@ export interface ProviderArguments {
 /**
  * Provider response
  */
-export interface ProviderResponse {
+interface ProviderResponse {
     /** Whether the request was successful */
     success: boolean;
     /** Generated content (string or stream) */
@@ -934,7 +943,7 @@ export interface ProviderResponse {
 /**
  * Provider function type
  */
-export type ProviderFunction = (
+type ProviderFunction = (
     args: ProviderArguments,
     abortSignal?: AbortSignal
 ) => Promise<ProviderResponse>;
@@ -942,7 +951,7 @@ export type ProviderFunction = (
 /**
  * Provider options
  */
-export interface ProviderOptions {
+interface ProviderOptions {
     /** Tokenizer name (e.g., 'gpt-4') */
     tokenizer?: string;
     /** Custom tokenizer function */
@@ -961,7 +970,7 @@ export interface ProviderOptions {
  * @important All methods are asynchronous unless otherwise noted.
  * Always use `await` or `.then()` when calling API methods.
  */
-export interface RisuaiPluginAPI {
+interface RisuaiPluginAPI {
     // ========== Version Information ==========
 
     /** API version string */
@@ -1109,21 +1118,23 @@ export interface RisuaiPluginAPI {
 
     /**
      * Gets the database with limited access
-     * @returns DatabaseSubset object (limited to allowed keys)
+     * @returns DatabaseSubset object (limited to allowed keys) or null if consent not given
      *
      * Allowed keys: characters, modules, enabledModules, moduleIntergration,
      * pluginV2, personas, plugins, pluginCustomStorage, temperature, askRemoval,
      * maxContext, maxResponse, frequencyPenalty, PresensePenalty, theme,
      * textTheme, lineHeight, seperateModelsForAxModels, seperateModels,
-     * customCSS, guiHTML, colorSchemeName
+     * customCSS, guiHTML, colorSchemeName, characterOrder, selectedPersona
      *
      * @example
      * ```typescript
      * const db = await risuai.getDatabase();
-     * console.log(db.characters);
+     * if(db) {
+     *   console.log(db.characters);
+     * }
      * ```
      */
-    getDatabase(): Promise<DatabaseSubset>;
+    getDatabase(): Promise<DatabaseSubset|null>;
 
     /**
      * Sets the database (lightweight save)
@@ -1174,7 +1185,7 @@ export interface RisuaiPluginAPI {
         callback: () => void | Promise<void>,
         icon?: string,
         iconType?: IconType
-    ): Promise<void>;
+    ): Promise<UIPartResponse>;
 
 
     /**
@@ -1203,7 +1214,13 @@ export interface RisuaiPluginAPI {
         icon: string,
         iconType: 'html'|'img'|'none',
         location?: 'action'|'chat'|'hamburger'
-    }, callback: () => void): Promise<void>;
+    }, callback: () => void): Promise<UIPartResponse>;
+
+    /**
+     * Unregisters a UI part
+     * @param id - UI part ID returned during registration
+     */
+    unregisterUIPart(id: string): Promise<void>;
 
     // ========== Provider APIs ==========
 
@@ -1218,7 +1235,7 @@ export interface RisuaiPluginAPI {
      * await risuai.addProvider(
      *   'MyProvider',
      *   async (args, abortSignal) => {
-     *     const response = await risuai.risuFetch('https://api.example.com/chat', {
+     *     const response = await risuai.nativeFetch('https://api.example.com/chat', {
      *       method: 'POST',
      *       body: JSON.stringify({
      *         messages: args.prompt_chat,
@@ -1350,12 +1367,40 @@ export interface RisuaiPluginAPI {
      */
     onUnload(func: () => void | Promise<void>): Promise<void>;
 
-    // ========== Internal Methods ==========
+    /**
+     * Gets the fetch logs
+     * @returns Array of fetch log entries or null if consent not given
+    */
+    getFetchLogs(): Promise<{
+        url: string;
+        body: string;
+        status?: number;
+        response?: string;
+        error?: string;
+        timestamp: number;
+    }[]|null>;
 
     /**
-     * @internal Gets old API keys (for debugging/compatibility)
+     * Checks and corrects character order in the database
      */
-    _getOldKeys(): Promise<string[]>;
+    checkCharOrder(): Promise<void>;
+
+    /**
+     * Gets runtime information about Risuai environment
+     * @returns Object containing apiVersion, platform, and saveMethod
+     */
+    getRuntimeInfo(): Promise<{
+        apiVersion: string;
+        platform: string;
+        saveMethod: string;
+    }>
+
+    /**
+     * Unwraps a SafeClassArray into a standard array
+     * @param safeArray - The SafeClassArray to unwrap
+     * @returns Standard array of items
+     */
+    unwarpSafeArray<T>(safeArray: SafeClassArray<T>): Promise<T[]>;
 }
 
 // ============================================================================
@@ -1365,8 +1410,9 @@ export interface RisuaiPluginAPI {
 /**
  * Global Risuai API object available in all plugins
  */
-declare global {
-    const risuai: RisuaiPluginAPI;
-}
+declare const risuai: RisuaiPluginAPI;
 
-export {};
+/**
+ * Global Risuai API object available in all plugins, alias for `risuai`
+ */
+declare const Risuai: RisuaiPluginAPI;

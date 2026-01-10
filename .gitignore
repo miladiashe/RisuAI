@@ -27,8 +27,8 @@ src-others/
 *.njsproj
 *.sln
 *.sw?
-/src-taurl/target/
-/src-taurl/gen/
+/src-tauri/target/
+/src-tauri/gen/
 /build/
 pycache/
 test.ts
@@ -46,9 +46,7 @@ dist.zip
 /scripts/
 .env
 /server/node/ssl/certificate
-/backup
-backup-init.sh
-backup-now.sh
+
 
 # Due to Cargo.lock makes the project build fail, we ignore it
 Cargo.lock

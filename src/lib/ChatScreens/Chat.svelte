@@ -1,6 +1,6 @@
 <script lang="ts">
     import { ArrowLeft, ArrowLeftRightIcon, ArrowRight, BookmarkIcon, BotIcon, CopyIcon, PowerOff, GitBranch, HamburgerIcon, LanguagesIcon, MenuIcon, PencilIcon, RefreshCcwIcon, SplitIcon, TrashIcon, UserIcon, Volume2Icon, Scissors } from "@lucide/svelte"
-    import { aiLawApplies, changeChatTo, foldChatToMessage, getFileSrc } from "src/ts/globalApi.svelte"
+    import { aiLawApplies, changeChatTo, foldChatToMessage, getFileSrc, createChatCopyName } from "src/ts/globalApi.svelte"
     import { ColorSchemeTypeStore } from "src/ts/gui/colorscheme"
     import { longpress } from "src/ts/gui/longtouch"
     import { getModelInfo } from "src/ts/model/modellist"
@@ -169,7 +169,7 @@
 
     async function handleButtonTriggerWithin(event: UIEvent) {
         const currentChar = getCurrentCharacter()
-        if(currentChar.type === 'group'){
+        if(!currentChar || currentChar.type === 'group'){
             return
         }
 
@@ -389,16 +389,23 @@
         {:else}
             <span class="text-xs">{statusMessage}</span>
             <div class="flex items-center ml-2 gap-2">
+                {@render translationButton()}
                 {#if window.innerWidth >= 640}
                     {@render majorIconButtonsBody(false)}
-                    <PopupButton>
-                        {@render minorIconButtonsBody(true)}
-                    </PopupButton>
+                    {#if DBState.db.characters[selIdState.selId]}
+                        <PopupButton>
+                            {@render minorIconButtonsBody(true)}
+                        </PopupButton>
+                    {/if}
                 {:else}
-                    <PopupButton>
-                        {@render majorIconButtonsBody(true)}
-                        {@render minorIconButtonsBody(true)}
-                    </PopupButton>
+                    {#if DBState.db.characters[selIdState.selId]}
+                        <PopupButton>
+                            {@render majorIconButtonsBody(true)}
+                            {@render minorIconButtonsBody(true)}
+                        </PopupButton>
+                    {:else}
+                        {@render majorIconButtonsBody(false)}
+                    {/if}
                 {/if}
                 {@render rerolls()}
 
@@ -651,6 +658,29 @@
         </button>
     {/if}
     {#if !$ConnectionOpenStore}
+        <button class="flex items-center hover:text-blue-500 transition-colors button-icon-remove" onclick={(e) => rm(e, false)} use:longpress={(e) => rm(e, true)}>
+            <TrashIcon size={20}/>
+
+            {#if showNames}
+                <span class="ml-1">{language.remove}</span>
+            {/if}
+        </button>
+    {/if}
+{/if}
+{/snippet}
+
+{#snippet translationButton(showNames = false)}
+    {#if DBState.db.translator !== '' && !blankMessage}
+        <button class={"flex items-center cursor-pointer hover:text-blue-500 transition-colors button-icon-translate " + (translated ? 'text-blue-400':'')} class:translating={translating} onclick={async () => {
+            translated = !translated
+        }}>
+            <LanguagesIcon />
+            {#if showNames}
+                <span class="ml-1">{language.translate}</span>
+            {/if}
+        </button>
+    {/if}
+    {#if idx > -1}
         <button class={"flex items-center hover:text-blue-500 transition-colors button-icon-edit "+(editMode?'text-blue-400':'')} onclick={() => {
             if(!editMode){
                 editMode = true
@@ -666,26 +696,7 @@
                 <span class="ml-1">{language.edit}</span>
             {/if}
         </button>
-        <button class="flex items-center hover:text-blue-500 transition-colors button-icon-remove" onclick={(e) => rm(e, false)} use:longpress={(e) => rm(e, true)}>
-            <TrashIcon size={20}/>
-
-            {#if showNames}
-                <span class="ml-1">{language.remove}</span>
-            {/if}
-        </button>
     {/if}
-{/if}
-{#if DBState.db.translator !== '' && !blankMessage}
-    <button class={"flex items-center cursor-pointer hover:text-blue-500 transition-colors button-icon-translate " + (translated ? 'text-blue-400':'')} class:translating={translating} onclick={async () => {
-        translated = !translated
-    }}>
-        <LanguagesIcon />
-
-        {#if showNames}
-            <span class="ml-1">{language.translate}</span>
-        {/if}
-    </button>
-{/if}
 {/snippet}
 
 {#snippet rerolls()}
@@ -725,9 +736,20 @@
     <button class="flex items-center hover:text-blue-500 transition-colors" onclick={async () => {
         await sleep(1)
         const currentChat = DBState.db.characters[selIdState.selId].chats[DBState.db.characters[selIdState.selId].chatPage]
+        
+        if(DBState.db.createFolderOnBranch && !currentChat.folderId){
+            const folderId = v4()
+            DBState.db.characters[selIdState.selId].chatFolders.unshift({
+                id: folderId,
+                name: `Branches of ${currentChat.name}`,
+                folded: false,
+            })
+            currentChat.folderId = folderId
+        }
+        
         const currentMessage = currentChat.message[idx]
         const newChat = $state.snapshot(currentChat)
-        newChat.name = `Copy of ${newChat.name}`
+        newChat.name = createChatCopyName(newChat.name, 'Branch')
         newChat.id = v4()
         newChat.message = newChat.message.slice(0, idx + 1)
         newChat.message.push({
@@ -1006,11 +1028,15 @@
             {@render senderIcon({rounded: DBState.db.roundIcons})}
             <span class="flex flex-col ml-4 w-full max-w-full min-w-0 text-black">
                 <div class="flexium items-center chat-width">
-                    {#if DBState.db.characters[selIdState.selId]?.chaId === "§playground" && !blankMessage}
+                    {#if DBState.db.characters[selIdState.selId]?.chaId === "§playground" && !blankMessage && DBState.db.characters[selIdState.selId]?.chats?.[DBState.db.characters[selIdState.selId]?.chatPage]?.message?.[idx]}
                         <span class="chat-width text-xl border-darkborderc flex items-center text-textcolor">
                             <span>{DBState.db.characters[selIdState.selId].chats[DBState.db.characters[selIdState.selId].chatPage].message[idx].role === 'char' ? 'Assistant' : 'User'}</span>
                             <button class="ml-2 text-textcolor2 hover:text-textcolor" onclick={() => {
                                 DBState.db.characters[selIdState.selId].chats[DBState.db.characters[selIdState.selId].chatPage].message[idx].role = DBState.db.characters[selIdState.selId].chats[DBState.db.characters[selIdState.selId].chatPage].message[idx].role === 'char' ? 'user' : 'char'
+                                ReloadChatPointer.update((v) => {
+                                    v[idx] = (v[idx] ?? 0) + 1
+                                    return v
+                                })
                             }}><ArrowLeftRightIcon size="18" /></button>
                         </span>
                     {:else if !blankMessage && !$HideIconStore}

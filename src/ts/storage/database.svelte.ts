@@ -12,9 +12,10 @@ import { defaultColorScheme, type ColorScheme } from '../gui/colorscheme';
 import type { PromptItem, PromptSettings } from '../process/prompt';
 import type { OobaChatCompletionRequestParams } from '../model/ooba';
 import { type HypaV3Settings, type HypaV3Preset, createHypaV3Preset } from '../process/memory/hypav3'
+import { isTauri, isNodeServer } from "src/ts/platform"
 
 //APP_VERSION_POINT is to locate the app version in the database file for version bumping
-export let appVer = "166.3.3" //<APP_VERSION_POINT>
+export let appVer = "2026.1.90" //<APP_VERSION_POINT>
 export let webAppSubVer = ''
 
 
@@ -607,15 +608,28 @@ export function setDatabase(data:Database){
     data.streamGeminiThoughts ??= false
     data.sourcemapTranslate ??= false
     data.settingsCloseButtonSize ??= 24
+    data.hideAllImages ??= false
     data.ImagenModel ??= 'imagen-4.0-generate-001'
     data.ImagenImageSize ??= '1K'
     data.ImagenAspectRatio ??= '1:1'
     data.ImagenPersonGeneration ??= 'allow_all'
-    //@ts-expect-error __TAURI_INTERNALS__ is injected by Tauri runtime, not defined in Window interface
-    if(!globalThis.__NODE__ && !window.__TAURI_INTERNALS__){
+    data.openaiCompatImage ??= {
+        url: '',
+        key: '',
+        model: '',
+        size: '1024x1024',
+        quality: 'auto'
+    }
+    data.autoScrollToNewMessage ??= true
+    data.alwaysScrollToNewMessage ??= false
+    data.newMessageButtonStyle ??= 'bottom-center'
+    data.echoMessage ??= "Echo Message"
+    data.echoDelay ??= 0
+    if(!isNodeServer && !isTauri){
         //this is intended to forcely reduce the size of the database in web
         data.promptInfoInsideChat = false
     }
+    data.createFolderOnBranch ??= true
     changeLanguage(data.language)
     setDatabaseLite(data)
 }
@@ -931,7 +945,6 @@ export interface Database{
     requestInfoInsideChat?:boolean
     additionalParams:[string, string][]
     heightMode:string
-    useAdvancedEditor:boolean
     noWaitForTranslate:boolean
     antiClaudeOverload:boolean
     maxSupaChunkSize:number
@@ -1124,9 +1137,25 @@ export interface Database{
     ImagenImageSize:string
     ImagenAspectRatio:string
     ImagenPersonGeneration:string,
+    openaiCompatImage: {
+        url: string
+        key: string
+        model: string
+        size: string
+        quality: string
+    }
     sourcemapTranslate:boolean
     settingsCloseButtonSize:number
+    promptDiffPrefs:PromptDiffPrefs
     enableBookmark?: boolean
+    hideAllImages?: boolean
+    autoScrollToNewMessage?: boolean
+    alwaysScrollToNewMessage?: boolean
+    newMessageButtonStyle?: string
+    pluginDevelopMode?: boolean
+    echoMessage?:string
+    echoDelay?:number
+    createFolderOnBranch?:boolean
 }
 
 interface SeparateParameters{
@@ -1691,6 +1720,15 @@ export interface MessagePresetInfo{
     promptText?: OpenAIChat[],
 }
 
+export interface PromptDiffPrefs {
+    diffStyle: 'line' | 'intraline'
+    formatStyle: 'raw' | 'card'
+    viewStyle: 'unified' | 'split'
+    isGrouped: boolean
+    showOnlyChanges: boolean
+    contextRadius: number
+}
+
 interface AINsettings{
     top_p: number,
     rep_pen: number,
@@ -2065,7 +2103,7 @@ import * as fflate from "fflate";
 import type { OnnxModelFiles } from '../process/transformers';
 import type { RisuModule } from '../process/modules';
 import type { SerializableHypaV2Data } from '../process/memory/hypav2';
-import { decodeRPack, encodeRPack } from '../rpack/rpack_bg';
+import { decodeRPack, encodeRPack } from '../rpack/rpack_js';
 import { DBState, selectedCharID } from '../stores.svelte';
 import { LLMFlags, LLMFormat, LLMTokenizer } from '../model/modellist';
 import type { HypaModel } from '../process/memory/hypamemory';
@@ -2187,7 +2225,7 @@ export async function importPreset(f:{
         pr.PresensePenalty = (pre.presence_penalty * 0.7) * 100
         pr.top_p = pre.top_p ?? 1
 
-        for(const prompt of pre?.prompt_order?.[0]?.order){
+        for(const prompt of pre.prompt_order[0].order){
             if(!prompt?.enabled){
                 continue
             }

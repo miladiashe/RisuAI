@@ -5,11 +5,12 @@ import { alertConfirm, alertError, alertPluginConfirm } from "../alert";
 import { selectSingleFile, sleep } from "../util";
 import type { OpenAIChat } from "../process/index.svelte";
 import { fetchNative, globalFetch, readImage, saveAsset, toGetter } from "../globalApi.svelte";
-import { DBState, pluginAlertModalStore, selectedCharID } from "../stores.svelte";
+import { DBState, hotReloading, pluginAlertModalStore, selectedCharID } from "../stores.svelte";
 import type { ScriptMode } from "../process/scripts";
 import { checkCodeSafety } from "./pluginSafety";
 import { SafeDocument, SafeIdbFactory, SafeLocalStorage } from "./pluginSafeClass";
 import { loadV3Plugins } from "./apiV3/v3";
+import { pluginCodeTranspiler } from "./apiV3/transpiler";
 
 export const customProviderStore = writable([] as string[])
 
@@ -25,6 +26,7 @@ interface ProviderPlugin {
     argMeta: { [key: string]: {[key:string]:string} }
     versionOfPlugin?: string
     updateURL?: string
+    enabled?: boolean
 }
 interface ProviderPluginCustomLink {
     link: string
@@ -127,17 +129,23 @@ export async function updatePlugin(plugin: RisuPlugin) {
 export async function importPlugin(code:string|null = null, argu:{
     isUpdate?: boolean
     originalPluginName?: string
+    isHotReload?: boolean
+    isTypescript?: boolean
 } = {}) {
     try {
         let jsFile = ''
         let db = getDatabase()
         let isUpdate = argu.isUpdate || false
         let originalPluginName = argu.originalPluginName || ''
+        let isTypescript = argu.isTypescript || false
         
         if(!code){
-            const f = await selectSingleFile(['js'])
+            const f = await selectSingleFile(['js','ts'])
             if (!f) {
                 return
+            }
+            if(f.name.endsWith('.ts')){
+                isTypescript = true
             }
             //support utf-8 with BOM or without BOM
             jsFile = Buffer.from(f.data).toString('utf-8').replace(/^\uFEFF/gm, "");
@@ -155,6 +163,15 @@ export async function importPlugin(code:string|null = null, argu:{
             }
         }
 
+        const showError = (msg: string) => {
+            if(argu.isHotReload){
+                console.error(`Hot-reload plugin "${name}" error: ${msg}`)
+            }
+            else{
+                alertError(msg)
+            }
+        }
+
         let displayName: string = undefined
         let arg: { [key: string]: 'int' | 'string' | string[] } = {}
         let realArg: { [key: string]: number | string } = {}
@@ -167,7 +184,7 @@ export async function importPlugin(code:string|null = null, argu:{
             if (line.startsWith('//@name')) {
                 const provied = line.slice(7)
                 if (provied === '') {
-                    alertError('plugin name must be longer than 0, did you put it correctly?')
+                    showError('plugin name must be longer than 0, did you put it correctly?')
                     return
                 }
                 name = provied.trim()
@@ -188,7 +205,7 @@ export async function importPlugin(code:string|null = null, argu:{
             if (line.startsWith('//@display-name')) {
                 const provied = line.slice('//@display-name'.length + 1)
                 if (provied === '') {
-                    alertError('plugin display name must be longer than 0, did you put it correctly?')
+                    showError('plugin display name must be longer than 0, did you put it correctly?')
                     return
                 }
                 displayName = provied.trim()
@@ -197,11 +214,11 @@ export async function importPlugin(code:string|null = null, argu:{
             if (line.startsWith('//@link')) {
                 const link = line.split(" ")[1]
                 if (!link || link === '') {
-                    alertError('plugin link is empty, did you put it correctly?')
+                    showError('plugin link is empty, did you put it correctly?')
                     return
                 }
                 if (!link.startsWith('https')) {
-                    alertError('plugin link must start with https, did you check it?')
+                    showError('plugin link must start with https, did you check it?')
                     return
                 }
                 const hoverText = line.split(' ').slice(2).join(' ').trim()
@@ -221,13 +238,13 @@ export async function importPlugin(code:string|null = null, argu:{
             if (line.startsWith('//@risu-arg') || line.startsWith('//@arg')) {
                 const provied = line.trim().split(' ')
                 if (provied.length < 3) {
-                    alertError('plugin argument is incorrect, did you put space in argument name?')
+                    showError('plugin argument is incorrect, did you put space in argument name?')
                     return
                 }
                 const provKey = provied[1]
 
                 if (provied[2] !== 'int' && provied[2] !== 'string') {
-                    alertError(`plugin argument type is "${provied[2]}", which is an unknown type.`)
+                    showError(`plugin argument type is "${provied[2]}", which is an unknown type.`)
                     return
                 }
                 if (provied[2] === 'int') {
@@ -265,11 +282,11 @@ export async function importPlugin(code:string|null = null, argu:{
                 try {
                     const url = new URL(updateURL)
                     if(url.protocol !== 'https:'){
-                        alertError('plugin update URL must start with https, did you put it correctly?')
+                        showError('plugin update URL must start with https, did you put it correctly?')
                         return
                     }
                 } catch (error) {
-                    alertError('plugin update URL is not a valid URL, did you put it correctly?')
+                    showError('plugin update URL is not a valid URL, did you put it correctly?')
                     return
                 }
             }
@@ -280,25 +297,34 @@ export async function importPlugin(code:string|null = null, argu:{
                 const versionLocation = jsFile.indexOf('//@version')
                 const numberOfBytesBefore = new TextEncoder().encode(jsFile.slice(0, versionLocation) + line).length
                 if(numberOfBytesBefore > 500){
-                    alertError('plugin version declaration must be within the first 512 Bytes of the file for proper parsing. move //@version line to the top of the file.')
+                    showError('plugin version declaration must be within the first 512 Bytes of the file for proper parsing. move //@version line to the top of the file.')
                     return
                 }
             }
         }
 
         if (name.length === 0) {
-            alertError('plugin name not found, did you put it correctly?')
+            showError('plugin name not found, did you put it correctly?')
             return
         }
 
         if(updateURL && versionOfPlugin.length === 0){
-            alertError('plugin version not found, did you put it correctly? It is required when update URL is provided.')
+            showError('plugin version not found, did you put it correctly? It is required when update URL is provided.')
             return
         }
 
         if(versionOfPlugin && compareVersions(versionOfPlugin, '0.0.1') === -1){
-            alertError('plugin version must be at least 0.0.1')
+            showError('plugin version must be at least 0.0.1')
             return
+        }
+
+        
+        if(isTypescript){
+            try {
+                jsFile = await pluginCodeTranspiler(jsFile)                
+            } catch (error) {
+                showError('Failed to transpile TypeScript code: ' + error.message)
+            }
         }
 
         let apiInternalVersion: 2|'2.1'|'3.0' = '2.1'
@@ -374,6 +400,10 @@ export async function importPlugin(code:string|null = null, argu:{
             apiInternalVersion = '3.0'
         }
 
+        if(apiInternalVersion !== '3.0' && argu.isHotReload){
+            showError('Only API version 3.0 plugins can be hot-reloaded.')
+            return
+        }
         
         let pluginData: RisuPlugin = {
             name: name,
@@ -385,7 +415,8 @@ export async function importPlugin(code:string|null = null, argu:{
             customLink: customLink,
             argMeta: argMeta,
             versionOfPlugin: versionOfPlugin,
-            updateURL: updateURL
+            updateURL: updateURL,
+            enabled: true
         }
 
         db.plugins ??= []
@@ -393,7 +424,7 @@ export async function importPlugin(code:string|null = null, argu:{
         const oldPluginIndex = db.plugins.findIndex((p: RisuPlugin) => p.name === pluginData.name);
 
         if(originalPluginName && originalPluginName !== pluginData.name){
-            alertError(`When updating plugin "${originalPluginName}", the plugin name cannot be changed to "${pluginData.name}". Please keep the original name to update.`)
+            showError(`When updating plugin "${originalPluginName}", the plugin name cannot be changed to "${pluginData.name}". Please keep the original name to update.`)
             return
         }
 
@@ -408,10 +439,15 @@ export async function importPlugin(code:string|null = null, argu:{
         if(oldPluginIndex !== -1){
             db.plugins[oldPluginIndex] = pluginData;
         }
-        else if(!isUpdate){
+        else if(!isUpdate || argu.isHotReload){
             db.plugins.push(pluginData)
         }
 
+        if(argu.isHotReload && !hotReloading.includes(pluginData.name)){
+            hotReloading.push(pluginData.name)
+        }
+
+        console.log(`Imported plugin: ${pluginData.name} (API v${apiVersion})`)
         setDatabaseLite(db)
 
         loadPlugins()
@@ -429,9 +465,9 @@ export async function loadPlugins() {
     let db = getDatabase()
 
 
-    const structuredCloned = safeStructuredClone(db.plugins)
-    const pluginV2 = structuredCloned.filter((a: RisuPlugin) => a.version === 2 || a.version === '2.1')
-    const pluginV3 = structuredCloned.filter((a: RisuPlugin) => a.version === '3.0')
+    const enabledPlugins = safeStructuredClone(db.plugins).filter((p: RisuPlugin) => p.enabled)
+    const pluginV2 = enabledPlugins.filter((a: RisuPlugin) => a.version === 2 || a.version === '2.1')
+    const pluginV3 = enabledPlugins.filter((a: RisuPlugin) => a.version === '3.0')
 
     await loadV2Plugin(pluginV2)
     await loadV3Plugins(pluginV3)
@@ -471,7 +507,7 @@ export const pluginV2 = {
     loaded: false
 }
 
-const allowedDbKeys = [
+export const allowedDbKeys = [
     'characters',
     'modules',
     'enabledModules',
@@ -494,7 +530,8 @@ const allowedDbKeys = [
     'customCSS',
     'guiHTML',
     'colorSchemeName',
-
+    'selectedPersona',
+    'characterOrder'
 ]
 
 export const getV2PluginAPIs = () => {
@@ -813,36 +850,39 @@ export async function loadV2Plugin(plugins: RisuPlugin[]) {
             version = 2
         }
 
+        const createRealScript = (data:string) => {
+            return `(async () => {
+                const risuFetch = globalThis.__pluginApis__.risuFetch
+                const nativeFetch = globalThis.__pluginApis__.nativeFetch
+                const getArg = globalThis.__pluginApis__.getArg
+                const printLog = globalThis.__pluginApis__.printLog
+                const getChar = globalThis.__pluginApis__.getChar
+                const setChar = globalThis.__pluginApis__.setChar
+                const addProvider = globalThis.__pluginApis__.addProvider
+                const addRisuScriptHandler = globalThis.__pluginApis__.addRisuScriptHandler
+                const removeRisuScriptHandler = globalThis.__pluginApis__.removeRisuScriptHandler
+                const addRisuReplacer = globalThis.__pluginApis__.addRisuReplacer
+                const removeRisuReplacer = globalThis.__pluginApis__.removeRisuReplacer
+                const onUnload = globalThis.__pluginApis__.onUnload
+                const setArg = globalThis.__pluginApis__.setArg
+                ${version === '2.1' ? `
+                    const safeGlobalThis = globalThis.__pluginApis__.getSafeGlobalThis()
+                    const Risuai = globalThis.__pluginApis__
+                    const safeLocalStorage = globalThis.__pluginApis__.safeLocalStorage
+                    const safeIdbFactory = globalThis.__pluginApis__.safeIdbFactory
+                    const alertStore = globalThis.__pluginApis__.alertStore
+                    const safeDocument = globalThis.__pluginApis__.safeDocument
+                    const getDatabase = globalThis.__pluginApis__.getDatabase
+                    const setDatabaseLite = globalThis.__pluginApis__.setDatabaseLite
+                    const setDatabase = globalThis.__pluginApis__.setDatabase
+                    const loadPlugins = globalThis.__pluginApis__.loadPlugins
+                    const SafeFunction = globalThis.__pluginApis__.SafeFunction
+                ` : ''}
 
-        const realScript = `(async () => {
-            const risuFetch = globalThis.__pluginApis__.risuFetch
-            const nativeFetch = globalThis.__pluginApis__.nativeFetch
-            const getArg = globalThis.__pluginApis__.getArg
-            const printLog = globalThis.__pluginApis__.printLog
-            const getChar = globalThis.__pluginApis__.getChar
-            const setChar = globalThis.__pluginApis__.setChar
-            const addProvider = globalThis.__pluginApis__.addProvider
-            const addRisuScriptHandler = globalThis.__pluginApis__.addRisuScriptHandler
-            const removeRisuScriptHandler = globalThis.__pluginApis__.removeRisuScriptHandler
-            const addRisuReplacer = globalThis.__pluginApis__.addRisuReplacer
-            const removeRisuReplacer = globalThis.__pluginApis__.removeRisuReplacer
-            const onUnload = globalThis.__pluginApis__.onUnload
-            const setArg = globalThis.__pluginApis__.setArg
-            ${version === '2.1' ? `
-                const safeGlobalThis = globalThis.__pluginApis__.getSafeGlobalThis()
-                const Risuai = globalThis.__pluginApis__
-                const safeLocalStorage = globalThis.__pluginApis__.safeLocalStorage
-                const safeIdbFactory = globalThis.__pluginApis__.safeIdbFactory
-                const alertStore = globalThis.__pluginApis__.alertStore
-                const safeDocument = globalThis.__pluginApis__.safeDocument
-                const getDatabase = globalThis.__pluginApis__.getDatabase
-                const setDatabaseLite = globalThis.__pluginApis__.setDatabaseLite
-                const setDatabase = globalThis.__pluginApis__.setDatabase
-                const loadPlugins = globalThis.__pluginApis__.loadPlugins
-                const SafeFunction = globalThis.__pluginApis__.SafeFunction
-            ` : ''}
-            ${data}
-        })();`
+                ${data}
+            })();`
+
+        }
 
         if(version === '2.1'){
             const safety = (await checkCodeSafety(plugin.script))
@@ -851,7 +891,7 @@ export async function loadV2Plugin(plugins: RisuPlugin[]) {
             console.log('Loading V2.1 Plugin', plugin.name, data)
 
             try {
-                new Function(realScript)()
+                new Function(createRealScript(data))()
             } catch (error) {
                 console.error(error)
             }
@@ -863,7 +903,7 @@ export async function loadV2Plugin(plugins: RisuPlugin[]) {
             console.log('Loading V2.0 Plugin', plugin.name)
 
             try {
-                eval(data)
+                eval(createRealScript(data))
             } catch (error) {
                 console.error(error)
             }

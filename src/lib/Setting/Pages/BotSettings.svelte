@@ -6,7 +6,8 @@
     
     import { DBState } from 'src/ts/stores.svelte';
     import { customProviderStore } from "src/ts/plugins/plugins";
-    import { downloadFile, isTauri } from "src/ts/globalApi.svelte";
+    import { downloadFile } from "src/ts/globalApi.svelte";
+    import { isTauri } from "src/ts/platform"
     import { tokenizeAccurate, tokenizerList } from "src/ts/tokenizer";
     import ModelList from "src/lib/UI/ModelList.svelte";
     import DropList from "src/lib/SideBars/DropList.svelte";
@@ -20,7 +21,7 @@
     import OptionInput from "src/lib/UI/GUI/OptionInput.svelte";
     import { openRouterModels } from "src/ts/model/openrouter";
     import OobaSettings from "./OobaSettings.svelte";
-    import Arcodion from "src/lib/UI/Arcodion.svelte";
+    import Accordion from "src/lib/UI/Accordion.svelte";
     import OpenrouterSettings from "./OpenrouterSettings.svelte";
     import ChatFormatSettings from "./ChatFormatSettings.svelte";
     import PromptSettings from "./PromptSettings.svelte";
@@ -29,6 +30,9 @@
   import { getModelInfo, LLMFlags, LLMFormat, LLMProvider } from "src/ts/model/modellist";
   import CheckInput from "src/lib/UI/GUI/CheckInput.svelte";
   import RegexList from "src/lib/SideBars/Scripts/RegexList.svelte";
+    import SettingRenderer from "../SettingRenderer.svelte";
+    import { allBasicParameterItems } from "src/ts/setting/botSettingsParamsData";
+    import SeparateParametersSection from "./SeparateParametersSection.svelte";
     
 let tokens = $state({
         mainPrompt: 0,
@@ -302,6 +306,13 @@ let tokens = $state({
 
     {/if}
 
+    {#if DBState.db.aiModel === 'echo_model' || DBState.db.subModel === 'echo_model'}
+        <span class="text-textcolor mt-2">Echo Message</span>
+        <TextAreaInput margin="bottom" bind:value={DBState.db.echoMessage} placeholder={"The message you want to receive as the bot's response\n(e.g., Lumi tilts her head, her white hair sliding down as her pretty green and aqua eyes sparkle…)"}/>
+        <span class="text-textcolor mt-2">Echo Delay (Seconds)</span>
+        <NumberInput marginBottom={true} bind:value={DBState.db.echoDelay} min={0}/>
+    {/if}
+
 
     {#if DBState.db.aiModel.startsWith("horde") || DBState.db.subModel.startsWith("horde") }
         <span class="text-textcolor">Horde {language.apiKey}</span>
@@ -329,52 +340,8 @@ let tokens = $state({
 {/if}
 
 {#if submenu === 1 || submenu === -1}
-    <span class="text-textcolor">{language.maxContextSize}</span>
-    <NumberInput min={0} marginBottom={true} bind:value={DBState.db.maxContext}/>
-
-
-    <span class="text-textcolor">{language.maxResponseSize}</span>
-    <NumberInput min={0} max={2048} marginBottom={true} bind:value={DBState.db.maxResponse}/>
-
-    {#if DBState.db.aiModel.startsWith('gpt') || DBState.db.aiModel === 'reverse_proxy' || DBState.db.aiModel === 'openrouter'}
-        <span class="text-textcolor">{language.seed}</span>
-
-        <NumberInput bind:value={DBState.db.generationSeed} marginBottom={true}/>
-    {/if}
-
-    {#if modelInfo.parameters.includes('thinking_tokens')}
-        <span class="text-textcolor">{language.thinkingTokens}</span>
-        <SliderInput min={-1} max={64000} marginBottom step={200} bind:value={DBState.db.thinkingTokens} disableable/>
-
-    {/if}
-    <span class="text-textcolor">{language.temperature} <Help key="tempature"/></span>
-    <SliderInput min={0} max={200} marginBottom bind:value={DBState.db.temperature} multiple={0.01} fixed={2} disableable/>
-    {#if modelInfo.parameters.includes('top_k')}
-        <span class="text-textcolor">Top K</span>
-        <SliderInput min={0} max={100} marginBottom step={1} bind:value={DBState.db.top_k} disableable/>
-    {/if}
-    {#if modelInfo.parameters.includes('min_p')}
-        <span class="text-textcolor">Min P</span>
-        <SliderInput min={0} max={1} marginBottom step={0.01} fixed={2} bind:value={DBState.db.min_p} disableable/>
-
-    {/if}
-    {#if modelInfo.parameters.includes('top_a')}
-        <span class="text-textcolor">Top A</span>
-        <SliderInput min={0} max={1} marginBottom step={0.01} fixed={2} bind:value={DBState.db.top_a} disableable/>
-    {/if}
-    {#if modelInfo.parameters.includes('repetition_penalty')}
-        <span class="text-textcolor">Repetition penalty</span>
-        <SliderInput min={0} max={2} marginBottom step={0.01} fixed={2} bind:value={DBState.db.repetition_penalty} disableable/>
-
-    {/if}
-    {#if modelInfo.parameters.includes('reasoning_effort')}
-        <span class="text-textcolor">Reasoning Effort</span>
-        <SliderInput min={-1} max={2} marginBottom step={1} fixed={0} bind:value={DBState.db.reasoningEffort} disableable/>
-    {/if}
-    {#if modelInfo.parameters.includes('verbosity')}
-        <span class="text-textcolor">Verbosity</span>
-    <SliderInput min={0} max={2} marginBottom step={1} fixed={0} bind:value={DBState.db.verbosity} disableable/>
-    {/if}
+    <!-- Data-driven basic parameters -->
+    <SettingRenderer items={allBasicParameterItems} {modelInfo} {subModelInfo} />
     {#if DBState.db.aiModel === 'textgen_webui' || DBState.db.aiModel === 'mancer' || DBState.db.aiModel.startsWith('local_') || DBState.db.aiModel.startsWith('hf:::')}
         <span class="text-textcolor">Repetition Penalty</span>
         <SliderInput min={1} max={1.5} step={0.01} fixed={2} marginBottom bind:value={DBState.db.ooba.repetition_penalty}/>
@@ -492,18 +459,7 @@ let tokens = $state({
         <span class="text-textcolor">Typical P</span>
         <SliderInput min={0} max={1} step={0.01} marginBottom fixed={2} bind:value={DBState.db.ainconfig.typical_p}/>
     {:else}
-        {#if modelInfo.parameters.includes('top_p')}
-            <span class="text-textcolor">Top P</span>
-            <SliderInput min={0} max={1} step={0.01} marginBottom fixed={2} bind:value={DBState.db.top_p} disableable/>
-        {/if}
-        {#if modelInfo.parameters.includes('frequency_penalty')}
-            <span class="text-textcolor">{language.frequencyPenalty}</span>
-            <SliderInput min={0} max={200} marginBottom fixed={2} multiple={0.01} bind:value={DBState.db.frequencyPenalty} disableable/>
-        {/if}
-        {#if modelInfo.parameters.includes('presence_penalty')}
-            <span class="text-textcolor">{language.presensePenalty}</span>
-            <SliderInput min={0} max={200} marginBottom fixed={2} multiple={0.01} bind:value={DBState.db.PresensePenalty} disableable/>
-        {/if}
+        <!-- Standard parameters now handled by SettingRenderer above -->
     {/if}
 
     {#if (DBState.db.reverseProxyOobaMode && DBState.db.aiModel === 'reverse_proxy') || (DBState.db.aiModel === 'ooba')}
@@ -514,49 +470,13 @@ let tokens = $state({
         <OpenrouterSettings />
     {/if}
 
-    <Arcodion name={language.seperateParameters} styled>
-        <CheckInput bind:check={DBState.db.seperateParametersEnabled} name={language.seperateParametersEnabled} />
-        {#if DBState.db.seperateParametersEnabled}
-            {#each Object.keys(DBState.db.seperateParameters) as param, i}
-                <Arcodion name={
-                    {
-                        memory: language.longTermMemory,
-                        emotion: language.emotionImage,
-                        translate: language.translator,
-                        otherAx: language.others,
-
-                    }[param]
-                } styled>
-                    <span class="text-textcolor">{language.temperature} <Help key="tempature"/></span>
-                    <SliderInput min={0} max={200} marginBottom bind:value={DBState.db.seperateParameters[param].temperature} multiple={0.01} fixed={2} disableable/>
-                    <span class="text-textcolor">Top K</span>
-                    <SliderInput min={0} max={100} marginBottom step={1} bind:value={DBState.db.seperateParameters[param].top_k} disableable/>
-                    <span class="text-textcolor">Repetition penalty</span>
-                    <SliderInput min={0} max={2} marginBottom step={0.01} fixed={2} bind:value={DBState.db.seperateParameters[param].repetition_penalty} disableable/>
-                    <span class="text-textcolor">Min P</span>
-                    <SliderInput min={0} max={1} marginBottom step={0.01} fixed={2} bind:value={DBState.db.seperateParameters[param].min_p} disableable/>
-                    <span class="text-textcolor">Top A</span>
-                    <SliderInput min={0} max={1} marginBottom step={0.01} fixed={2} bind:value={DBState.db.seperateParameters[param].top_a} disableable/>
-                    <span class="text-textcolor">Top P</span>
-                    <SliderInput min={0} max={1} marginBottom step={0.01} fixed={2} bind:value={DBState.db.seperateParameters[param].top_p} disableable/>
-                    <span class="text-textcolor">Frequency Penalty</span>
-                    <SliderInput min={0} max={200} marginBottom step={0.01} fixed={2} bind:value={DBState.db.seperateParameters[param].frequency_penalty} disableable/>
-                    <span class="text-textcolor">Presence Penalty</span>
-                    <SliderInput min={0} max={200} marginBottom step={0.01} fixed={2} bind:value={DBState.db.seperateParameters[param].presence_penalty} disableable/>
-                    <span class="text-textcolor">{language.thinkingTokens}</span>
-                    <SliderInput min={0} max={64000} marginBottom step={200} fixed={0} bind:value={DBState.db.seperateParameters[param].thinking_tokens} disableable/>
-                    <span class="text-textcolor">Verbosity</span>
-                    <SliderInput min={0} max={2} marginBottom step={1} fixed={0} bind:value={DBState.db.seperateParameters[param].verbosity} disableable/>
-                </Arcodion>
-            {/each}
-
-        {/if}
-    </Arcodion>
+    <!-- Separate Parameters - handled by custom component -->
+    <SeparateParametersSection />
 
 {/if}
 
 {#if submenu === 3 || submenu === -1}
-    <Arcodion styled name="Bias " help="bias">
+    <Accordion styled name="Bias " help="bias">
         <table class="contain w-full max-w-full tabler">
             <tbody>
             <tr>
@@ -607,10 +527,10 @@ let tokens = $state({
                 }
             }}><HardDriveUploadIcon /></button>
         </div>
-    </Arcodion>
+    </Accordion>
 
     {#if DBState.db.aiModel === 'reverse_proxy'}
-    <Arcodion styled name="{language.additionalParams} " help="additionalParams">
+    <Accordion styled name="{language.additionalParams} " help="additionalParams">
         <table class="contain w-full max-w-full tabler">
             <tbody>
             <tr>
@@ -648,11 +568,11 @@ let tokens = $state({
             {/each}
             </tbody>
         </table>
-    </Arcodion>
+    </Accordion>
     {/if}
 
 
-    <Arcodion styled name={language.promptTemplate}>
+    <Accordion styled name={language.promptTemplate}>
         {#if DBState.db.promptTemplate}
             {#if submenu !== -1}
                 <PromptSettings mode='inline' subMenu={1} />
@@ -662,7 +582,7 @@ let tokens = $state({
                 DBState.db.promptTemplate = []
             }}/>
         {/if}
-    </Arcodion>
+    </Accordion>
 
     {#snippet CustomFlagButton(name:string,flag:number)}
         <Button className="mt-2" onclick={(e) => {
@@ -677,7 +597,7 @@ let tokens = $state({
         </Button>
     {/snippet}
 
-    <Arcodion styled name={language.customFlags}>
+    <Accordion styled name={language.customFlags}>
         <Check bind:check={DBState.db.enableCustomFlags} name={language.enableCustomFlags}/>
 
 
@@ -703,13 +623,13 @@ let tokens = $state({
             {@render CustomFlagButton('deepSeekThinkingOutput', 19)}
 
         {/if}
-    </Arcodion>
+    </Accordion>
 
-    <Arcodion styled name={language.moduleIntergration} help="moduleIntergration">
+    <Accordion styled name={language.moduleIntergration} help="moduleIntergration">
         <TextAreaInput bind:value={DBState.db.moduleIntergration} fullwidth height={"32"} autocomplete="off"/>
-    </Arcodion>
+    </Accordion>
 
-    <Arcodion styled name={language.tools}>
+    <Accordion styled name={language.tools}>
         <Check name={language.search} check={DBState.db.modelTools.includes('search')} onChange={() => {
             if(DBState.db.modelTools.includes('search')){
                 DBState.db.modelTools = DBState.db.modelTools.filter((tool) => tool !== 'search')
@@ -718,13 +638,13 @@ let tokens = $state({
                 DBState.db.modelTools.push('search')
             }
         }} />
-    </Arcodion>
+    </Accordion>
     
-    <Arcodion styled name={language.regexScript}>
+    <Accordion styled name={language.regexScript}>
         <RegexList bind:value={DBState.db.presetRegex} buttons />
-    </Arcodion>
+    </Accordion>
 
-    <Arcodion styled name={language.icon}>
+    <Accordion styled name={language.icon}>
         <div class="p-2 rounded-md border border-darkborderc flex flex-col items-center gap-2">
             <span>
                 {language.preview}
@@ -755,7 +675,7 @@ let tokens = $state({
         }}>
             <UploadIcon />
         </button>
-    </Arcodion>
+    </Accordion>
     {#if submenu !== -1}
         <Button onclick={() => {$openPresetList = true}} className="mt-4">{language.presets}</Button>
     {/if}
