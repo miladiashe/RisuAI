@@ -3,13 +3,14 @@ import { SandboxHost } from "./factory";
 import { getDatabase } from "src/ts/storage/database.svelte";
 import { tagWhitelist } from "../pluginSafeClass";
 import DOMPurify from 'dompurify';
-import { additionalChatMenu, additionalFloatingActionButtons, additionalHamburgerMenu, additionalSettingsMenu, type MenuDef } from "src/ts/stores.svelte";
+import { additionalChatMenu, additionalFloatingActionButtons, additionalHamburgerMenu, additionalSettingsMenu, DBState, selectedCharID, type MenuDef } from "src/ts/stores.svelte";
 import { v4 } from "uuid";
 import { sleep } from "src/ts/util";
 import { alertConfirm, alertError, alertNormal } from "src/ts/alert";
 import { language } from "src/lang";
 import { checkCharOrder, forageStorage, getFetchLogs } from "src/ts/globalApi.svelte";
 import { isNodeServer, isTauri } from "src/ts/platform";
+import { get } from "svelte/store";
 
 /*
     V3 API for RisuAI Plugins
@@ -495,12 +496,16 @@ const unloadV3Plugin = async (pluginName: string) => {
             sleep(1000) //timeout after 1 second
         ])
     }
-    instance.host.terminate();
+    try {
+        instance?.host?.terminate();        
+    } catch (error) {
+        console.error(`Error terminating plugin ${pluginName}:`, error);
+    }
 }
 
 const permissionGivenPlugins: Set<string> = new Set();
 
-const checkPluginPermission = async (pluginName: string, permissionDesc: 'fetchLogs'|'db'|'mainDom') => {
+const getPluginPermission = async (pluginName: string, permissionDesc: 'fetchLogs'|'db'|'mainDom') => {
     if(permissionGivenPlugins.has(pluginName)){
         return true;
     }
@@ -509,6 +514,9 @@ const checkPluginPermission = async (pluginName: string, permissionDesc: 'fetchL
         : permissionDesc === 'db' ? language.getFullDatabaseConsent.replace("{}", pluginName)
         : permissionDesc === 'mainDom' ? language.mainDomAccessConsent.replace("{}", pluginName)
         : `Error`
+    if(alertTitle === 'Error'){
+        return false;
+    }
     const conf = await alertConfirm(alertTitle)
     if(conf){
         permissionGivenPlugins.add(pluginName);
@@ -537,19 +545,19 @@ const makeRisuaiAPIV3 = (iframe:HTMLIFrameElement,plugin:RisuPlugin) => {
         loadPlugins: oldApis.loadPlugins,
         readImage: oldApis.readImage,
         saveAsset: oldApis.saveAsset,
-
         //Same functionality, but new implementation
-        getDatabase: async () => {
-            const conf = await checkPluginPermission(plugin.name, 'db');
+        getDatabase: async (includeOnly:string[]|'all' = 'all') => {
+            const conf = await getPluginPermission(plugin.name, 'db');
             if(!conf){
                 return null;
             }
-            const db = getDatabase({
-                snapshot: true
-            });
+            const db = getDatabase();
             let liteDB = {}
             for(const key of allowedDbKeys){
-                (liteDB as any)[key] = (db as any)[key];
+                if(includeOnly !== 'all' && !includeOnly.includes(key)){
+                    continue;
+                }
+                (liteDB as any)[key] = $state.snapshot((db as any)[key]);
             }
             return liteDB;
         },
@@ -571,13 +579,60 @@ const makeRisuaiAPIV3 = (iframe:HTMLIFrameElement,plugin:RisuPlugin) => {
         },
         setArgument: async (key:string, value:string) => {
             const db = getDatabase();
-            for (const plugin of db.plugins) {
-                if (plugin.name === plugin.name) {
-                    plugin.realArg[key] = value;
+            for (const p of db.plugins) {
+                if (p.name === plugin.name) {
+                    p.realArg[key] = value;
                 }
             }
         },
-
+        getCharacterFromIndex: (index:number) => {
+            const db = DBState.db
+            const charIds = Object.keys(db.characters);
+            const charId = charIds[index];
+            if(charId){
+                return $state.snapshot(db.characters[charId]);
+            }
+            return null;
+        },
+        setCharacterToIndex: (index:number, char:any) => {
+            const db = DBState.db
+            const charIds = Object.keys(db.characters);
+            const charId = charIds[index];
+            if(charId){
+                DBState.db.characters[charId] = char
+            }
+        },
+        getChatFromIndex: (characterIndex:number, chatIndex:number) => {
+            const db = DBState.db
+            const charIds = Object.keys(db.characters);
+            const charId = charIds[characterIndex];
+            if(charId){
+                const chats = db.characters[charId].chats;
+                if(chats && chats[chatIndex]){
+                    return $state.snapshot(chats[chatIndex]);
+                }
+            }
+            return null;
+        },
+        setChatToIndex: (characterIndex:number, chatIndex:number, chat:any) => {
+            const db = DBState.db
+            const charIds = Object.keys(db.characters);
+            const charId = charIds[characterIndex];
+            if(charId){
+                const chats = db.characters[charId].chats;
+                if(chats && chats[chatIndex]){
+                    DBState.db.characters[charId].chats[chatIndex] = chat
+                }
+            }
+        },
+        getCurrentCharacterIndex: () => {
+            return get(selectedCharID)
+        },
+        getCurrentChatIndex: () => {
+            const db = DBState.db
+            const charId = get(selectedCharID)
+            return db.characters[charId].chatPage
+        },
         //New names for character APIs, to match API naming conventions
         getCharacter: oldApis.getChar,
         setCharacter: oldApis.setChar,
@@ -614,7 +669,7 @@ const makeRisuaiAPIV3 = (iframe:HTMLIFrameElement,plugin:RisuPlugin) => {
             iframe.style.display = "none";
         },
         getRootDocument: async () => {
-            const conf = await checkPluginPermission(plugin.name, 'mainDom');
+            const conf = await getPluginPermission(plugin.name, 'mainDom');
             if(!conf){
                 return null;
             }
@@ -731,7 +786,7 @@ const makeRisuaiAPIV3 = (iframe:HTMLIFrameElement,plugin:RisuPlugin) => {
         },
         getFetchLogs: async () => {
             const unsafeFetchLog = getFetchLogs()
-            const conf = await checkPluginPermission(plugin.name, 'fetchLogs');
+            const conf = await getPluginPermission(plugin.name, 'fetchLogs');
             if(!conf){
                 return null;
             }
@@ -770,6 +825,9 @@ const makeRisuaiAPIV3 = (iframe:HTMLIFrameElement,plugin:RisuPlugin) => {
             }
         },
         checkCharOrder: checkCharOrder,
+        requestPluginPermission: (permission:string) => {
+            return getPluginPermission(plugin.name, permission as any);
+        },
         //Internal use APIs
         _getOldKeys: () => {
             return Object.keys(oldApis)
@@ -860,9 +918,16 @@ export function getV3PluginInstance(name: string) {
     return v3PluginInstances.find(p => p.name === name);
 }
 
-globalThis.__debugV3Plugin = (code: string|Function) => {
+globalThis.__debugV3Plugin = (code: string|Function, pluginName: string = '') => {
     if(code instanceof Function){
         code = `(${code.toString()})()`;
     }
-    return v3PluginInstances[0].host.executeInIframe(code);
+    if(pluginName === ''){
+        return v3PluginInstances[0].host.executeInIframe(code);
+    }
+    const instance = v3PluginInstances.find(p => p.name === pluginName);
+    if(!instance){
+        throw new Error(`Plugin ${pluginName} not found.`);
+    }
+    return instance.host.executeInIframe(code);
 };

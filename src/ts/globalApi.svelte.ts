@@ -484,7 +484,7 @@ export async function saveDb() {
         } catch (error) {
             savetrys += 1
             if (savetrys > 4) {
-                await alertConfirm(`DBSaveError: ${error.message ?? error}. report to the developer.`)
+                alertError(error)
             }
             else {
                 console.error(error)
@@ -649,7 +649,6 @@ export async function globalFetch(url: string, arg: GlobalFetchArgs = {}): Promi
     try {
         const db = getDatabase();
         const method = arg.method ?? "POST";
-        db.requestmet = "normal";
 
         if (arg.abortSignal?.aborted) { return { ok: false, data: 'aborted', headers: {}, status: 400 }; }
 
