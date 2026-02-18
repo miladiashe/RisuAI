@@ -182,11 +182,23 @@ export async function initializeMCPs(additionalMCPs?:string[]) {
                 return DBState.db.authRefreshes.find(refresh => refresh.url === mcp);
             }
 
-            const mcpClient = new MCPClient(mcpUrl);
-            mcpClient.registerRefreshToken = registerRefresh;
-            mcpClient.getRefreshToken = getRefresh;
-            await mcpClient.checkHandshake()
-            MCPs[mcp] = mcpClient;
+            try {
+                
+                if(
+                    !mcpUrl.startsWith('https://') &&
+                    !mcpUrl.startsWith('http://')
+                ){
+                    throw new Error('Invalid MCP URL');
+                }
+                    
+                const mcpClient = new MCPClient(mcpUrl);
+                mcpClient.registerRefreshToken = registerRefresh;
+                mcpClient.getRefreshToken = getRefresh;
+                await mcpClient.checkHandshake()
+                MCPs[mcp] = mcpClient;   
+            } catch (error) {
+                console.error(`Failed to initialize MCP at ${mcp}:`, error);
+            }
         }
     }
 
