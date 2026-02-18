@@ -435,7 +435,12 @@ app.get('/api/remove', async (req, res, next) => {
     }
 
     try {
-        await fs.rm(path.join(savePath, filePath));
+        const fullPath = path.join(savePath, filePath);
+        // Check if file exists before trying to delete
+        if (existsSync(fullPath)) {
+            await fs.rm(fullPath);
+        }
+        // Return success even if file doesn't exist (idempotent delete)
         res.send({
             success: true,
         });
