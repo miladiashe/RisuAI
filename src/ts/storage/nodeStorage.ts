@@ -145,6 +145,24 @@ export class NodeStorage{
         }
     }
 
+    async splitDbCharacters():Promise<string[]> {
+        await this.checkAuth()
+        const da = await fetch('/api/split_db_characters', {
+            method: "POST",
+            headers: {
+                'risu-auth': auth
+            }
+        })
+        if(da.status < 200 || da.status >= 300){
+            throw "splitDbCharacters Error"
+        }
+        const data = await da.json()
+        if(data.error){
+            throw data.error
+        }
+        return data.chaIds || []
+    }
+
     getAuth():string{
         return auth
     }

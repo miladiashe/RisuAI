@@ -32,6 +32,13 @@ export class AutoStorage{
             await this.realStorage.setItem(key, new TextEncoder().encode(value))
         }
     }
+    async splitDbCharacters():Promise<string[]|null> {
+        await this.Init()
+        if(this.realStorage instanceof NodeStorage){
+            return await this.realStorage.splitDbCharacters()
+        }
+        return null
+    }
     async getItem(key:string):Promise<Buffer> {
         await this.Init()
         return await this.realStorage.getItem(key)

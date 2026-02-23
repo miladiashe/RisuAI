@@ -174,7 +174,7 @@ export class RisuSaveEncoder {
         // for characters whose remote files already exist
         const useRemote = (isTauri || isNodeServer) && !disableRemoteSaving();
         let existingRemoteNames: Set<string> | null = null;
-        if(useRemote && skipRemoteSavingOnCharacters && isNodeServer){
+        if(useRemote && isNodeServer){
             try {
                 const allKeys = await forageStorage.keys();
                 existingRemoteNames = new Set<string>();
@@ -186,6 +186,24 @@ export class RisuSaveEncoder {
                         this.cachedRemoteKeys.add(key);
                     }
                 }
+
+                // First run: no remote files exist yet. Ask the server to split
+                // database.bin into individual character remote files. This avoids
+                // JSON.stringify for every character on the client (OOM on mobile).
+                const hasAllCharacters = data.characters.every(
+                    c => existingRemoteNames!.has(c.chaId)
+                );
+                if(!hasAllCharacters && data.characters.length > 0){
+                    console.log('Requesting server-side character block creation...');
+                    const serverChaIds = await forageStorage.splitDbCharacters();
+                    if(serverChaIds && serverChaIds.length > 0){
+                        for(const chaId of serverChaIds){
+                            existingRemoteNames.add(chaId);
+                            this.cachedRemoteKeys.add(`remotes/${chaId}.local.bin`);
+                        }
+                        console.log(`Server created ${serverChaIds.length} remote character files`);
+                    }
+                }
             } catch(e) {
                 console.error('Failed to pre-fetch remote keys:', e);
             }
@@ -195,7 +213,7 @@ export class RisuSaveEncoder {
             // Fast path: if remote file already exists on server, skip JSON.stringify
             // and create a small pointer block directly. This avoids allocating
             // potentially multi-MB strings for each character during init.
-            if(useRemote && skipRemoteSavingOnCharacters && existingRemoteNames?.has(character.chaId)){
+            if(useRemote && existingRemoteNames?.has(character.chaId)){
                 this.blocks[character.chaId] = await this.createRemotePointerBlock(
                     character.chaId,
                     RisuSaveType.CHARACTER_WITH_CHAT
