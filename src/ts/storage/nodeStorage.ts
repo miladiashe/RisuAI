@@ -163,6 +163,42 @@ export class NodeStorage{
         return data.chaIds || []
     }
 
+    async makeColdDataServer():Promise<{chaId:string, chatIndex:number, coldKey:string, msgCount?:number, firstMsgTime?:number}[]> {
+        await this.checkAuth()
+        const da = await fetch('/api/make_cold_data', {
+            method: "POST",
+            headers: {
+                'risu-auth': auth
+            }
+        })
+        if(da.status < 200 || da.status >= 300){
+            throw "makeColdDataServer Error"
+        }
+        const data = await da.json()
+        if(data.error){
+            throw data.error
+        }
+        return data.changes || []
+    }
+
+    async getColdStorageServer(key:string):Promise<any> {
+        await this.checkAuth()
+        const da = await fetch('/api/get_cold_storage', {
+            method: "POST",
+            headers: {
+                'risu-auth': auth,
+                'x-cold-key': key
+            }
+        })
+        if(da.status === 404){
+            return null
+        }
+        if(da.status < 200 || da.status >= 300){
+            return null
+        }
+        return await da.json()
+    }
+
     getAuth():string{
         return auth
     }

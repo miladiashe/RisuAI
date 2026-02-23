@@ -44,16 +44,12 @@ async function getColdStorageItem(key:string) {
         return null
     }
     else if(isNodeServer){
+        // Server decompresses and returns JSON directly
         try {
-            const storage = forageStorage.realStorage as NodeStorage
-            const f = await storage.getItem('coldstorage/' + key)
-            if(!f){
-                return null
-            }
-            const text = new TextDecoder().decode(await decompress(new Uint8Array(f)))
-            return JSON.parse(text)
+            return await forageStorage.getColdStorageServer(key)
         }
         catch (error) {
+            console.error('Cold storage server read failed:', error)
             return null
         }
     }
@@ -168,7 +164,15 @@ async function setColdStorageItem(key:string, value:any):Promise<boolean> {
 }
 
 async function removeColdStorageItem(key:string) {
-    if(isTauri){
+    if(isNodeServer){
+        try {
+            const storage = forageStorage.realStorage as NodeStorage
+            await storage.removeItem('coldstorage/' + key)
+        } catch (error) {
+            console.error(error)
+        }
+    }
+    else if(isTauri){
         try {
             await remove('./coldstorage/'+key+'.json')
         } catch (error) {
@@ -192,12 +196,66 @@ export async function makeColdData(){
         return
     }
 
+    // Node server: offload all heavy work (DB decode, JSON.stringify,
+    // compression, file I/O) to the server to avoid OOM on mobile.
+    if(isNodeServer){
+        try {
+            const changes = await forageStorage.makeColdDataServer()
+            if(!changes || changes.length === 0) return
+
+            const currentTime = Date.now()
+
+            // Build a chaId → character index map for fast lookup
+            const chaIdMap = new Map<string, number>()
+            for(let i = 0; i < DBState.db.characters.length; i++){
+                chaIdMap.set(DBState.db.characters[i].chaId, i)
+            }
+
+            for(const change of changes){
+                const charIndex = chaIdMap.get(change.chaId)
+                if(charIndex === undefined) continue
+
+                const chat = DBState.db.characters[charIndex]?.chats?.[change.chatIndex]
+                if(!chat) continue
+
+                // Skip if already cold-stored (race condition guard)
+                if(chat.message?.[0]?.data?.startsWith(coldStorageHeader)) continue
+
+                // Verify the chat in memory matches what the server cold-stored
+                // (guards against index mismatch if DB was modified between saves)
+                if(change.msgCount !== undefined && chat.message.length !== change.msgCount) continue
+                if(change.firstMsgTime !== undefined && (chat.message[0]?.time ?? 0) !== change.firstMsgTime) continue
+
+                chat.message = [{
+                    time: currentTime,
+                    data: coldStorageHeader + change.coldKey,
+                    role: 'char'
+                }]
+                chat.hypaV2Data = {
+                    chunks:[],
+                    mainChunks: [],
+                    lastMainChunkID: 0,
+                }
+                chat.hypaV3Data = {
+                    summaries:[]
+                }
+                chat.scriptstate = {}
+                chat.localLore = []
+            }
+
+            console.log(`Applied ${changes.length} server-side cold storage changes`)
+        } catch(error) {
+            console.error('Server-side cold storage failed:', error)
+        }
+        return
+    }
+
     const currentTime = Date.now()
     const coldTime = currentTime - 1000 * 60 * 60 * 24 * 30 //30 days before now
 
     for(let i=0;i<DBState.db.characters.length;i++){
         for(let j=0;j<DBState.db.characters[i].chats.length;j++){
-            
+
             const chat = DBState.db.characters[i].chats[j]
             let greatestTime = chat.lastDate ?? 0
 
@@ -303,9 +361,12 @@ export async function preLoadChat(characterIndex:number, chatIndex:number){
             chat.lastDate = Date.now()
             return
         }
-        await setColdStorageItem(coldDataKey + '_accessMeta', {
-            lastAccess: Date.now()
-        })
+        // Server's get_cold_storage already writes accessMeta
+        if(!isNodeServer){
+            await setColdStorageItem(coldDataKey + '_accessMeta', {
+                lastAccess: Date.now()
+            })
+        }
     }
 
 }
