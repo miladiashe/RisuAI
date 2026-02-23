@@ -17,6 +17,7 @@
     import { language } from "../../lang"
     import { alertClear, alertConfirm, alertInput, alertNormal, alertRequestData, alertWait } from "../../ts/alert"
     import { ParseMarkdown, type CbsConditions, type simpleCharacterArgument } from "../../ts/parser.svelte"
+    import { getLLMCache, setLLMCache } from "src/ts/translator/translator"
     import { getCurrentCharacter, getCurrentChat, setCurrentChat, type MessageGenerationInfo } from "../../ts/storage/database.svelte"
     import { selectedCharID } from "../../ts/stores.svelte"
     import { HideIconStore, ReloadGUIPointer, selIdState } from "../../ts/stores.svelte"
@@ -29,6 +30,9 @@
     let editMode = $state(false)
     let statusMessage:string = $state('')
     let retranslate = $state(false)
+    let translationEditMode = $state(false)
+    let translationEditValue = $state('')
+    let translationCacheKey = $state('')
     let bodyRoot:HTMLElement|null = $state(null)
     interface Props {
         message?: string;
@@ -109,6 +113,30 @@
 
     async function edit(){
         DBState.db.characters[selIdState.selId].chats[DBState.db.characters[selIdState.selId].chatPage].message[idx].data = message
+    }
+
+    async function getTranslationCacheKey(): Promise<string> {
+        if (DBState.db.translateBeforeHTMLFormatting) {
+            return msgDisplay
+        } else if (!DBState.db.legacyTranslation) {
+            return await ParseMarkdown(msgDisplay, character, 'pretranslate', idx, getCbsCondition())
+        } else {
+            return await ParseMarkdown(msgDisplay, character, 'notrim', idx, getCbsCondition())
+        }
+    }
+
+    async function openTranslationEdit() {
+        const key = await getTranslationCacheKey()
+        const cached = await getLLMCache(key)
+        translationCacheKey = key
+        translationEditValue = cached ?? ''
+        translationEditMode = true
+    }
+
+    async function saveTranslationEdit() {
+        await setLLMCache(translationCacheKey, translationEditValue)
+        translationEditMode = false
+        retranslate = true
     }
 
     function handlePartialEditSave(e: CustomEvent<{ newData: string }>) {
@@ -302,7 +330,7 @@
         {/if}
         {#if DBState.db.translatorType === 'llm' && translated}
             <button class="text-sm p-1 text-textcolor2 border-darkborderc float-end mr-2 my-1
-                            hover:ring-darkbutton hover:ring-3 rounded-md hover:text-textcolor transition-all flex justify-center items-center" 
+                            hover:ring-darkbutton hover:ring-3 rounded-md hover:text-textcolor transition-all flex justify-center items-center"
                     onclick={() => {
                         retranslate = true
                     }}
@@ -310,6 +338,16 @@
                 <RefreshCcwIcon size={20} />
                 <span class="ml-1">
                     {language.retranslate}
+                </span>
+            </button>
+            <button class="text-sm p-1 text-textcolor2 border-darkborderc float-end mr-2 my-1
+                            hover:ring-darkbutton hover:ring-3 rounded-md hover:text-textcolor transition-all flex justify-center items-center"
+                    class:text-blue-400={translationEditMode}
+                    onclick={openTranslationEdit}
+            >
+                <PencilIcon size={20} />
+                <span class="ml-1">
+                    {language.editTranslationDisplay}
                 </span>
             </button>
         {/if}
@@ -321,6 +359,20 @@
         <AutoresizeArea bind:value={message} handleLongPress={() => {
             editMode = false
         }} />
+    {:else if translationEditMode}
+        <AutoresizeArea bind:value={translationEditValue} />
+        <div class="flex gap-2 mt-2">
+            <button class="text-sm px-3 py-1 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors"
+                onclick={saveTranslationEdit}
+            >
+                {language.partialEdit.save}
+            </button>
+            <button class="text-sm px-3 py-1 text-textcolor2 border border-darkborderc rounded-md hover:text-textcolor transition-colors"
+                onclick={() => { translationEditMode = false }}
+            >
+                {language.cancel}
+            </button>
+        </div>
     {:else if isComment}
         <div class="w-full flex justify-center text-textcolor2 italic mb-12">
 

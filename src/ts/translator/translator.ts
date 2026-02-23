@@ -567,6 +567,10 @@ export async function getLLMCache(text:string):Promise<string | null>{
     return await LLMCacheStorage.getItem(text)
 }
 
+export async function setLLMCache(text:string, translation:string):Promise<void>{
+    await LLMCacheStorage.setItem(text, translation)
+}
+
 
 function applyEdittransRegex(
       text: string, 
