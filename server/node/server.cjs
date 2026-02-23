@@ -537,10 +537,9 @@ app.post('/api/write_text', async (req, res, next) => {
     }
 });
 
-// --- Server-side DB character splitting ---
-// Decodes database.bin on the server and writes individual character
-// remote block files, so the mobile client never needs to JSON.stringify
-// each character (which causes OOM on large databases).
+// --- Server-side DB helpers ---
+// Shared logic for decoding database.bin, character splitting,
+// and cold storage operations.
 
 const dbMagicHeader = Buffer.from([0, 82, 73, 83, 85, 83, 65, 86, 69, 0, 7]);
 const dbMagicCompressedHeader = Buffer.from([0, 82, 73, 83, 85, 83, 65, 86, 69, 0, 8]);
@@ -549,6 +548,8 @@ const dbMagicRisuSaveHeader = Buffer.from('RISUSAVE\0');
 
 const RISUSAVE_TYPE_CHARACTER_WITH_CHAT = 2;
 const RISUSAVE_TYPE_REMOTE = 6;
+
+const coldStorageHeader = '\uEF01COLDSTORAGE\uEF01';
 
 function checkDbHeader(data) {
     if (data.length < dbMagicHeader.length) return 'none';
@@ -559,19 +560,44 @@ function checkDbHeader(data) {
     return 'none';
 }
 
-function writeCharRemoteFile(chaId, jsonStr) {
-    const remoteFileName = `remotes/${chaId}.local.bin`;
-    const hexPath = Buffer.from(remoteFileName, 'utf-8').toString('hex');
-    const fullPath = path.join(savePath, hexPath);
-    if (!existsSync(fullPath)) {
-        writeFileSync(fullPath, jsonStr, 'utf-8');
-    }
-    return chaId;
+function getDbFilePath() {
+    const dbHexPath = Buffer.from('database/database.bin', 'utf-8').toString('hex');
+    return path.join(savePath, dbHexPath);
 }
 
-function extractRisuSaveCharacters(data) {
+// Decode database.bin into a full database object with characters array
+async function decodeFullDatabase(rawData) {
+    const header = checkDbHeader(rawData);
+
+    if (header === 'risusave') {
+        return decodeRisuSaveFullDatabase(rawData);
+    }
+
+    const unpackr = new Unpackr({ int64AsType: 'number', useRecords: false });
+    let decoded;
+
+    switch(header) {
+        case 'raw':
+            decoded = unpackr.decode(rawData.subarray(dbMagicHeader.length));
+            break;
+        case 'compressed':
+            decoded = unpackr.decode(fflate.decompressSync(rawData.subarray(dbMagicCompressedHeader.length)));
+            break;
+        case 'stream': {
+            const decompressed = await gunzipAsync(rawData.subarray(dbMagicStreamCompressedHeader.length));
+            decoded = unpackr.decode(decompressed);
+            break;
+        }
+        default:
+            decoded = unpackr.decode(rawData);
+    }
+
+    return decoded;
+}
+
+function decodeRisuSaveFullDatabase(data) {
     let offset = dbMagicRisuSaveHeader.length;
-    const chaIds = [];
+    const characters = [];
 
     while (offset < data.length) {
         try {
@@ -597,22 +623,25 @@ function extractRisuSaveCharacters(data) {
             }
 
             if (type === RISUSAVE_TYPE_CHARACTER_WITH_CHAT) {
-                // Inline character block: write directly as remote file
                 const content = blockData.toString('utf-8');
                 try {
                     const parsed = JSON.parse(content);
-                    if (parsed.chaId) {
-                        writeCharRemoteFile(parsed.chaId, content);
-                        chaIds.push(parsed.chaId);
-                    }
+                    if (parsed.chaId) characters.push(parsed);
                 } catch(e) { /* skip malformed */ }
             }
             else if (type === RISUSAVE_TYPE_REMOTE) {
-                // Remote pointer: character file already exists
                 try {
                     const remoteInfo = JSON.parse(blockData.toString('utf-8'));
                     if (remoteInfo.type === RISUSAVE_TYPE_CHARACTER_WITH_CHAT && remoteInfo.name) {
-                        chaIds.push(remoteInfo.name);
+                        // Read full character data from remote file
+                        const remoteFileName = `remotes/${remoteInfo.name}.local.bin`;
+                        const hexPath = Buffer.from(remoteFileName, 'utf-8').toString('hex');
+                        const fullPath = path.join(savePath, hexPath);
+                        if (existsSync(fullPath)) {
+                            const content = readFileSync(fullPath, 'utf-8');
+                            const parsed = JSON.parse(content);
+                            if (parsed.chaId) characters.push(parsed);
+                        }
                     }
                 } catch(e) { /* skip */ }
             }
@@ -620,7 +649,38 @@ function extractRisuSaveCharacters(data) {
             break;
         }
     }
-    return chaIds;
+
+    return { characters };
+}
+
+function writeCharRemoteFile(chaId, jsonStr) {
+    const remoteFileName = `remotes/${chaId}.local.bin`;
+    const hexPath = Buffer.from(remoteFileName, 'utf-8').toString('hex');
+    const fullPath = path.join(savePath, hexPath);
+    if (!existsSync(fullPath)) {
+        writeFileSync(fullPath, jsonStr, 'utf-8');
+    }
+    return chaId;
+}
+
+// --- Cold storage file operations ---
+
+function coldStorageFilePath(key) {
+    const fileName = `coldstorage/${key}`;
+    const hexPath = Buffer.from(fileName, 'utf-8').toString('hex');
+    return path.join(savePath, hexPath);
+}
+
+function writeColdStorageFile(key, jsonStr) {
+    const compressed = fflate.compressSync(Buffer.from(jsonStr, 'utf-8'));
+    writeFileSync(coldStorageFilePath(key), Buffer.from(compressed));
+}
+
+function readColdStorageRaw(key) {
+    const fullPath = coldStorageFilePath(key);
+    if (!existsSync(fullPath)) return null;
+    const data = readFileSync(fullPath);
+    return fflate.decompressSync(new Uint8Array(data));
 }
 
 app.post('/api/split_db_characters', async (req, res, next) => {
@@ -630,8 +690,7 @@ app.post('/api/split_db_characters', async (req, res, next) => {
     }
 
     try {
-        const dbHexPath = Buffer.from('database/database.bin', 'utf-8').toString('hex');
-        const dbFilePath = path.join(savePath, dbHexPath);
+        const dbFilePath = getDbFilePath();
 
         if (!existsSync(dbFilePath)) {
             res.status(404).send({ error: 'Database not found' });
@@ -639,38 +698,14 @@ app.post('/api/split_db_characters', async (req, res, next) => {
         }
 
         const rawData = await fs.readFile(dbFilePath);
-        const header = checkDbHeader(rawData);
-        let chaIds = [];
+        const db = await decodeFullDatabase(rawData);
+        const chaIds = [];
 
-        if (header === 'risusave') {
-            chaIds = extractRisuSaveCharacters(rawData);
-        } else {
-            // Legacy formats: decode full database with msgpackr
-            const unpackr = new Unpackr({ int64AsType: 'number', useRecords: false });
-            let decoded;
-
-            switch(header) {
-                case 'raw':
-                    decoded = unpackr.decode(rawData.subarray(dbMagicHeader.length));
-                    break;
-                case 'compressed':
-                    decoded = unpackr.decode(fflate.decompressSync(rawData.subarray(dbMagicCompressedHeader.length)));
-                    break;
-                case 'stream': {
-                    const decompressed = await gunzipAsync(rawData.subarray(dbMagicStreamCompressedHeader.length));
-                    decoded = unpackr.decode(decompressed);
-                    break;
-                }
-                default:
-                    decoded = unpackr.decode(rawData);
-            }
-
-            if (decoded?.characters) {
-                for (const character of decoded.characters) {
-                    if (character?.chaId) {
-                        writeCharRemoteFile(character.chaId, JSON.stringify(character));
-                        chaIds.push(character.chaId);
-                    }
+        if (db?.characters) {
+            for (const character of db.characters) {
+                if (character?.chaId) {
+                    writeCharRemoteFile(character.chaId, JSON.stringify(character));
+                    chaIds.push(character.chaId);
                 }
             }
         }
@@ -679,6 +714,128 @@ app.post('/api/split_db_characters', async (req, res, next) => {
         res.send({ success: true, chaIds });
     } catch (error) {
         console.error('[Server] Error splitting database:', error);
+        next(error);
+    }
+});
+
+// --- Server-side cold storage creation ---
+// Reads database.bin, finds chats older than 30 days, compresses them
+// into cold storage files, and returns which chats were cold-stored.
+// The client only needs to apply the pointer changes to its in-memory DB.
+app.post('/api/make_cold_data', async (req, res, next) => {
+    if(req.headers['risu-auth'].trim() !== password.trim()){
+        res.status(400).send({ error: 'Password Incorrect' });
+        return;
+    }
+
+    try {
+        const dbFilePath = getDbFilePath();
+
+        if (!existsSync(dbFilePath)) {
+            res.status(404).send({ error: 'Database not found' });
+            return;
+        }
+
+        const rawData = await fs.readFile(dbFilePath);
+        const db = await decodeFullDatabase(rawData);
+
+        if (!db?.characters) {
+            res.send({ success: true, changes: [] });
+            return;
+        }
+
+        const currentTime = Date.now();
+        const coldTime = currentTime - 1000 * 60 * 60 * 24 * 30; // 30 days
+        const changes = [];
+
+        for (let i = 0; i < db.characters.length; i++) {
+            const character = db.characters[i];
+            if (!character?.chats) continue;
+
+            for (let j = 0; j < character.chats.length; j++) {
+                const chat = character.chats[j];
+
+                if (!chat.message || chat.message.length < 4) continue;
+                if (chat.message?.[0]?.data?.startsWith(coldStorageHeader)) continue;
+
+                let greatestTime = chat.lastDate ?? 0;
+                for (const msg of chat.message) {
+                    if (msg.time && msg.time > greatestTime) {
+                        greatestTime = msg.time;
+                    }
+                }
+
+                if (greatestTime >= coldTime) continue;
+
+                const id = crypto.randomUUID();
+                const coldData = {
+                    message: chat.message,
+                    hypaV2Data: chat.hypaV2Data,
+                    hypaV3Data: chat.hypaV3Data,
+                    scriptstate: chat.scriptstate,
+                    localLore: chat.localLore
+                };
+
+                try {
+                    writeColdStorageFile(id, JSON.stringify(coldData));
+
+                    // Verify the written data can be read back
+                    const verified = readColdStorageRaw(id);
+                    if (!verified) continue;
+                    const parsed = JSON.parse(Buffer.from(verified).toString('utf-8'));
+                    if (!parsed || (!Array.isArray(parsed) && !parsed.message)) continue;
+
+                    changes.push({
+                        chaId: character.chaId,
+                        chatIndex: j,
+                        coldKey: id
+                    });
+                } catch(e) {
+                    console.error(`[Server] Cold storage write failed for chat ${j} in character ${character.chaId}:`, e);
+                }
+            }
+        }
+
+        console.log(`[Server] Created ${changes.length} cold storage entries`);
+        res.send({ success: true, changes });
+    } catch (error) {
+        console.error('[Server] Error creating cold data:', error);
+        next(error);
+    }
+});
+
+// --- Server-side cold storage retrieval ---
+// Reads a cold storage file, decompresses it on the server,
+// and returns JSON directly so the client avoids fflate decompression.
+app.post('/api/get_cold_storage', async (req, res, next) => {
+    if(req.headers['risu-auth'].trim() !== password.trim()){
+        res.status(400).send({ error: 'Password Incorrect' });
+        return;
+    }
+
+    const key = req.headers['x-cold-key'];
+    if (!key) {
+        res.status(400).send({ error: 'Key required' });
+        return;
+    }
+
+    try {
+        const decompressed = readColdStorageRaw(key);
+        if (!decompressed) {
+            res.status(404).send({ error: 'Cold storage item not found' });
+            return;
+        }
+
+        // Write access metadata (fire-and-forget)
+        try {
+            writeColdStorageFile(key + '_accessMeta', JSON.stringify({ lastAccess: Date.now() }));
+        } catch(e) { /* non-critical */ }
+
+        // Send decompressed JSON directly without re-parsing
+        res.setHeader('Content-Type', 'application/json');
+        res.send(Buffer.from(decompressed));
+    } catch (error) {
+        console.error('[Server] Error reading cold storage:', error);
         next(error);
     }
 });
