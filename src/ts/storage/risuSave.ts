@@ -22,9 +22,6 @@ const unpackr = new Unpackr({
 })
 
 const disableRemoteSaving = () => {
-    // Node server always enables remote saving to prevent mobile OOM
-    // during character block encoding
-    if (isNodeServer) return false
     try {
         const db = getDatabase()
         return !db.enableRemoteSaving
