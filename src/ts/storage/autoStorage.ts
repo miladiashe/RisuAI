@@ -22,6 +22,16 @@ export class AutoStorage{
         await this.realStorage.setItem(key, value)
         return null
     }
+    async setItemText(key:string, value:string):Promise<void> {
+        await this.Init()
+        if(this.realStorage instanceof NodeStorage){
+            await this.realStorage.setItemText(key, value)
+        }
+        else{
+            // Fallback: encode on client side for non-node storage
+            await this.realStorage.setItem(key, new TextEncoder().encode(value))
+        }
+    }
     async getItem(key:string):Promise<Buffer> {
         await this.Init()
         return await this.realStorage.getItem(key)

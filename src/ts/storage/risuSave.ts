@@ -119,6 +119,20 @@ export class RisuSaveEncoder {
 
     private blocks: { [key: string]: Uint8Array } = {};
     private compression: boolean = false;
+    private cachedRemoteKeys: Set<string> | null = null;
+
+    private async createRemotePointerBlock(name: string, type: RisuSaveType): Promise<Uint8Array> {
+        return await this.encodeRawBlock({
+            compression: false,
+            data: JSON.stringify({
+                v: 1,
+                type: type,
+                name: name,
+            }),
+            type: RisuSaveType.REMOTE,
+            name: name
+        });
+    }
 
     async init(data:Database,arg:{
         compression?: boolean,
@@ -154,17 +168,55 @@ export class RisuSaveEncoder {
             type: RisuSaveType.MODULES,
             name: 'modules'
         });
-        for( const character of data.characters) {
-            this.blocks[character.chaId] = await this.encodeBlock({
-                compression,
-                data: JSON.stringify(character),
-                type: RisuSaveType.CHARACTER_WITH_CHAT,
-                name: character.chaId,
-                skipRemoteSaving: skipRemoteSavingOnCharacters
-            }, {
-                remote: 'prefer'
-            });
+
+        // For node server with remote saving, pre-fetch existing remote file keys
+        // to avoid per-character HTTP calls and skip JSON.stringify entirely
+        // for characters whose remote files already exist
+        const useRemote = (isTauri || isNodeServer) && !disableRemoteSaving();
+        let existingRemoteNames: Set<string> | null = null;
+        if(useRemote && skipRemoteSavingOnCharacters && isNodeServer){
+            try {
+                const allKeys = await forageStorage.keys();
+                existingRemoteNames = new Set<string>();
+                this.cachedRemoteKeys = new Set<string>();
+                for(const key of allKeys){
+                    if(key.startsWith('remotes/') && key.endsWith('.local.bin')){
+                        const name = key.slice('remotes/'.length, -'.local.bin'.length);
+                        existingRemoteNames.add(name);
+                        this.cachedRemoteKeys.add(key);
+                    }
+                }
+            } catch(e) {
+                console.error('Failed to pre-fetch remote keys:', e);
+            }
         }
+
+        for( const character of data.characters) {
+            // Fast path: if remote file already exists on server, skip JSON.stringify
+            // and create a small pointer block directly. This avoids allocating
+            // potentially multi-MB strings for each character during init.
+            if(useRemote && skipRemoteSavingOnCharacters && existingRemoteNames?.has(character.chaId)){
+                this.blocks[character.chaId] = await this.createRemotePointerBlock(
+                    character.chaId,
+                    RisuSaveType.CHARACTER_WITH_CHAT
+                );
+                checkedRemoteExistence.add(character.chaId);
+            }
+            else{
+                this.blocks[character.chaId] = await this.encodeBlock({
+                    compression,
+                    data: JSON.stringify(character),
+                    type: RisuSaveType.CHARACTER_WITH_CHAT,
+                    name: character.chaId,
+                    skipRemoteSaving: skipRemoteSavingOnCharacters
+                }, {
+                    remote: 'prefer'
+                });
+            }
+        }
+
+        this.cachedRemoteKeys = null;
+
         this.blocks['config'] = await this.encodeBlock({
             compression,
             data: JSON.stringify({
@@ -323,7 +375,6 @@ export class RisuSaveEncoder {
 
     async encodeRemoteBlock(arg:EncodeBlockArg){
         console.log(`Encoding remote block: ${arg.name}`);
-        const encoded = new TextEncoder().encode(arg.data);
         const fileName = `remotes/${arg.name}.local.bin`
 
         if(arg.skipRemoteSaving && checkedRemoteExistence.has(arg.name) === false){
@@ -332,9 +383,14 @@ export class RisuSaveEncoder {
                 fileExists = await exists(fileName, { baseDir: BaseDirectory.AppData });
             }
             else{
-                const stored = await forageStorage.keys();
-                if(stored.includes(fileName)){
-                    fileExists = true;
+                if(this.cachedRemoteKeys){
+                    fileExists = this.cachedRemoteKeys.has(fileName);
+                }
+                else{
+                    const stored = await forageStorage.keys();
+                    if(stored.includes(fileName)){
+                        fileExists = true;
+                    }
                 }
             }
             if(!fileExists){
@@ -346,12 +402,19 @@ export class RisuSaveEncoder {
 
         if(!arg.skipRemoteSaving){
             if(isTauri){
+                const encoded = new TextEncoder().encode(arg.data);
                 if(!(await exists('remotes', { baseDir: BaseDirectory.AppData }))){
                     await mkdir('remotes', { recursive: true, baseDir: BaseDirectory.AppData });
                 }
                 await writeFile(fileName, encoded!, { baseDir: BaseDirectory.AppData });
             }
+            else if(isNodeServer){
+                // Send text directly to server, avoiding TextEncoder.encode()
+                // allocation on the client. Server writes UTF-8 to disk.
+                await forageStorage.setItemText(fileName, arg.data);
+            }
             else{
+                const encoded = new TextEncoder().encode(arg.data);
                 await forageStorage.setItem(fileName, encoded);
             }
         }

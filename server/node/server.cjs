@@ -498,6 +498,40 @@ app.post('/api/write', async (req, res, next) => {
     }
 });
 
+// Write text/JSON data directly as UTF-8, avoiding client-side TextEncoder.encode()
+app.post('/api/write_text', async (req, res, next) => {
+    if(req.headers['risu-auth'].trim() !== password.trim()){
+        console.log('incorrect')
+        res.status(400).send({
+            error:'Password Incorrect'
+        });
+        return
+    }
+    const filePath = req.headers['file-path'];
+    const textContent = req.body
+    if (!filePath || !textContent) {
+        res.status(400).send({
+            error:'File path required'
+        });
+        return;
+    }
+    if(!isHex(filePath)){
+        res.status(400).send({
+            error:'Invaild Path'
+        });
+        return;
+    }
+
+    try {
+        await fs.writeFile(path.join(savePath, filePath), textContent, 'utf-8');
+        res.send({
+            success: true
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
 const oauthData = {
     client_id: '',
     client_secret: '',
