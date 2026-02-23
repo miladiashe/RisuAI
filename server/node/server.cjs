@@ -5,6 +5,11 @@ const htmlparser = require('node-html-parser');
 const { existsSync, mkdirSync, readFileSync, writeFileSync } = require('fs');
 const fs = require('fs/promises')
 const crypto = require('crypto')
+const { Unpackr } = require('msgpackr')
+const fflate = require('fflate')
+const zlib = require('zlib')
+const { promisify } = require('util')
+const gunzipAsync = promisify(zlib.gunzip)
 app.use(express.static(path.join(process.cwd(), 'dist'), {index: false}));
 app.use(express.json({ limit: '500mb' }));
 app.use(express.raw({ type: 'application/octet-stream', limit: '500mb' }));
@@ -499,6 +504,186 @@ app.post('/api/write', async (req, res, next) => {
             success: true
         });
     } catch (error) {
+        next(error);
+    }
+});
+
+// Write text/JSON data directly as UTF-8, avoiding client-side TextEncoder.encode()
+app.post('/api/write_text', async (req, res, next) => {
+    if(req.headers['risu-auth'].trim() !== password.trim()){
+        console.log('incorrect')
+        res.status(400).send({
+            error:'Password Incorrect'
+        });
+        return
+    }
+    const filePath = req.headers['file-path'];
+    const textContent = req.body
+    if (!filePath || !textContent) {
+        res.status(400).send({
+            error:'File path required'
+        });
+        return;
+    }
+    if(!isHex(filePath)){
+        res.status(400).send({
+            error:'Invaild Path'
+        });
+        return;
+    }
+
+    try {
+        await fs.writeFile(path.join(savePath, filePath), textContent, 'utf-8');
+        res.send({
+            success: true
+        });
+    } catch (error) {
+        next(error);
+    }
+});
+
+// --- Server-side DB character splitting ---
+// Decodes database.bin on the server and writes individual character
+// remote block files, so the mobile client never needs to JSON.stringify
+// each character (which causes OOM on large databases).
+
+const dbMagicHeader = Buffer.from([0, 82, 73, 83, 85, 83, 65, 86, 69, 0, 7]);
+const dbMagicCompressedHeader = Buffer.from([0, 82, 73, 83, 85, 83, 65, 86, 69, 0, 8]);
+const dbMagicStreamCompressedHeader = Buffer.from([0, 82, 73, 83, 85, 83, 65, 86, 69, 0, 9]);
+const dbMagicRisuSaveHeader = Buffer.from('RISUSAVE\0');
+
+const RISUSAVE_TYPE_CHARACTER_WITH_CHAT = 2;
+const RISUSAVE_TYPE_REMOTE = 6;
+
+function checkDbHeader(data) {
+    if (data.length < dbMagicHeader.length) return 'none';
+    if (data.subarray(0, dbMagicHeader.length).equals(dbMagicHeader)) return 'raw';
+    if (data.subarray(0, dbMagicCompressedHeader.length).equals(dbMagicCompressedHeader)) return 'compressed';
+    if (data.subarray(0, dbMagicStreamCompressedHeader.length).equals(dbMagicStreamCompressedHeader)) return 'stream';
+    if (data.subarray(0, dbMagicRisuSaveHeader.length).equals(dbMagicRisuSaveHeader)) return 'risusave';
+    return 'none';
+}
+
+function writeCharRemoteFile(chaId, jsonStr) {
+    const remoteFileName = `remotes/${chaId}.local.bin`;
+    const hexPath = Buffer.from(remoteFileName, 'utf-8').toString('hex');
+    const fullPath = path.join(savePath, hexPath);
+    if (!existsSync(fullPath)) {
+        writeFileSync(fullPath, jsonStr, 'utf-8');
+    }
+    return chaId;
+}
+
+function extractRisuSaveCharacters(data) {
+    let offset = dbMagicRisuSaveHeader.length;
+    const chaIds = [];
+
+    while (offset < data.length) {
+        try {
+            const type = data[offset];
+            const compression = data[offset + 1] === 1;
+            offset += 2;
+
+            const nameLength = data[offset];
+            offset += 1;
+            const name = data.subarray(offset, offset + nameLength).toString('utf-8');
+            offset += nameLength;
+
+            const lengthBuf = Buffer.alloc(4);
+            data.copy(lengthBuf, 0, offset, offset + 4);
+            const blockLength = lengthBuf.readUInt32LE(0);
+            offset += 4;
+
+            let blockData = data.subarray(offset, offset + blockLength);
+            offset += blockLength;
+
+            if (compression) {
+                blockData = zlib.gunzipSync(blockData);
+            }
+
+            if (type === RISUSAVE_TYPE_CHARACTER_WITH_CHAT) {
+                // Inline character block: write directly as remote file
+                const content = blockData.toString('utf-8');
+                try {
+                    const parsed = JSON.parse(content);
+                    if (parsed.chaId) {
+                        writeCharRemoteFile(parsed.chaId, content);
+                        chaIds.push(parsed.chaId);
+                    }
+                } catch(e) { /* skip malformed */ }
+            }
+            else if (type === RISUSAVE_TYPE_REMOTE) {
+                // Remote pointer: character file already exists
+                try {
+                    const remoteInfo = JSON.parse(blockData.toString('utf-8'));
+                    if (remoteInfo.type === RISUSAVE_TYPE_CHARACTER_WITH_CHAT && remoteInfo.name) {
+                        chaIds.push(remoteInfo.name);
+                    }
+                } catch(e) { /* skip */ }
+            }
+        } catch(e) {
+            break;
+        }
+    }
+    return chaIds;
+}
+
+app.post('/api/split_db_characters', async (req, res, next) => {
+    if(req.headers['risu-auth'].trim() !== password.trim()){
+        res.status(400).send({ error: 'Password Incorrect' });
+        return;
+    }
+
+    try {
+        const dbHexPath = Buffer.from('database/database.bin', 'utf-8').toString('hex');
+        const dbFilePath = path.join(savePath, dbHexPath);
+
+        if (!existsSync(dbFilePath)) {
+            res.status(404).send({ error: 'Database not found' });
+            return;
+        }
+
+        const rawData = await fs.readFile(dbFilePath);
+        const header = checkDbHeader(rawData);
+        let chaIds = [];
+
+        if (header === 'risusave') {
+            chaIds = extractRisuSaveCharacters(rawData);
+        } else {
+            // Legacy formats: decode full database with msgpackr
+            const unpackr = new Unpackr({ int64AsType: 'number', useRecords: false });
+            let decoded;
+
+            switch(header) {
+                case 'raw':
+                    decoded = unpackr.decode(rawData.subarray(dbMagicHeader.length));
+                    break;
+                case 'compressed':
+                    decoded = unpackr.decode(fflate.decompressSync(rawData.subarray(dbMagicCompressedHeader.length)));
+                    break;
+                case 'stream': {
+                    const decompressed = await gunzipAsync(rawData.subarray(dbMagicStreamCompressedHeader.length));
+                    decoded = unpackr.decode(decompressed);
+                    break;
+                }
+                default:
+                    decoded = unpackr.decode(rawData);
+            }
+
+            if (decoded?.characters) {
+                for (const character of decoded.characters) {
+                    if (character?.chaId) {
+                        writeCharRemoteFile(character.chaId, JSON.stringify(character));
+                        chaIds.push(character.chaId);
+                    }
+                }
+            }
+        }
+
+        console.log(`[Server] Split ${chaIds.length} characters into remote files`);
+        res.send({ success: true, chaIds });
+    } catch (error) {
+        console.error('[Server] Error splitting database:', error);
         next(error);
     }
 });

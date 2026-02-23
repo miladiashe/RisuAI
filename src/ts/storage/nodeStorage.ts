@@ -24,6 +24,25 @@ export class NodeStorage{
             throw data.error
         }
     }
+    async setItemText(key:string, value:string) {
+        await this.checkAuth()
+        const da = await fetch('/api/write_text', {
+            method: "POST",
+            body: value,
+            headers: {
+                'content-type': 'text/plain;charset=UTF-8',
+                'file-path': Buffer.from(key, 'utf-8').toString('hex'),
+                'risu-auth': auth
+            }
+        })
+        if(da.status < 200 || da.status >= 300){
+            throw "setItemText Error"
+        }
+        const data = await da.json()
+        if(data.error){
+            throw data.error
+        }
+    }
     async getItem(key:string):Promise<Buffer> {
         await this.checkAuth()
         const da = await fetch('/api/read', {
@@ -124,6 +143,24 @@ export class NodeStorage{
                 authChecked = true
             }
         }
+    }
+
+    async splitDbCharacters():Promise<string[]> {
+        await this.checkAuth()
+        const da = await fetch('/api/split_db_characters', {
+            method: "POST",
+            headers: {
+                'risu-auth': auth
+            }
+        })
+        if(da.status < 200 || da.status >= 300){
+            throw "splitDbCharacters Error"
+        }
+        const data = await da.json()
+        if(data.error){
+            throw data.error
+        }
+        return data.chaIds || []
     }
 
     getAuth():string{
