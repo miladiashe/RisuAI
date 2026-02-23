@@ -163,7 +163,7 @@ export class NodeStorage{
         return data.chaIds || []
     }
 
-    async makeColdDataServer():Promise<{chaId:string, chatIndex:number, coldKey:string}[]> {
+    async makeColdDataServer():Promise<{chaId:string, chatIndex:number, coldKey:string, msgCount?:number, firstMsgTime?:number}[]> {
         await this.checkAuth()
         const da = await fetch('/api/make_cold_data', {
             method: "POST",

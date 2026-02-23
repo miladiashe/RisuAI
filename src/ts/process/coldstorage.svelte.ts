@@ -164,7 +164,15 @@ async function setColdStorageItem(key:string, value:any):Promise<boolean> {
 }
 
 async function removeColdStorageItem(key:string) {
-    if(isTauri){
+    if(isNodeServer){
+        try {
+            const storage = forageStorage.realStorage as NodeStorage
+            await storage.removeItem('coldstorage/' + key)
+        } catch (error) {
+            console.error(error)
+        }
+    }
+    else if(isTauri){
         try {
             await remove('./coldstorage/'+key+'.json')
         } catch (error) {
@@ -212,6 +220,11 @@ export async function makeColdData(){
 
                 // Skip if already cold-stored (race condition guard)
                 if(chat.message?.[0]?.data?.startsWith(coldStorageHeader)) continue
+
+                // Verify the chat in memory matches what the server cold-stored
+                // (guards against index mismatch if DB was modified between saves)
+                if(change.msgCount !== undefined && chat.message.length !== change.msgCount) continue
+                if(change.firstMsgTime !== undefined && (chat.message[0]?.time ?? 0) !== change.firstMsgTime) continue
 
                 chat.message = [{
                     time: currentTime,
@@ -348,9 +361,12 @@ export async function preLoadChat(characterIndex:number, chatIndex:number){
             chat.lastDate = Date.now()
             return
         }
-        await setColdStorageItem(coldDataKey + '_accessMeta', {
-            lastAccess: Date.now()
-        })
+        // Server's get_cold_storage already writes accessMeta
+        if(!isNodeServer){
+            await setColdStorageItem(coldDataKey + '_accessMeta', {
+                lastAccess: Date.now()
+            })
+        }
     }
 
 }

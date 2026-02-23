@@ -39,7 +39,7 @@ export class AutoStorage{
         }
         return null
     }
-    async makeColdDataServer():Promise<{chaId:string, chatIndex:number, coldKey:string}[]|null> {
+    async makeColdDataServer():Promise<{chaId:string, chatIndex:number, coldKey:string, msgCount?:number, firstMsgTime?:number}[]|null> {
         await this.Init()
         if(this.realStorage instanceof NodeStorage){
             return await this.realStorage.makeColdDataServer()

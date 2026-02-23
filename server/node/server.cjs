@@ -788,7 +788,11 @@ app.post('/api/make_cold_data', async (req, res, next) => {
                     changes.push({
                         chaId: character.chaId,
                         chatIndex: j,
-                        coldKey: id
+                        coldKey: id,
+                        // Verification metadata so the client can confirm
+                        // the chat at this index matches what was cold-stored
+                        msgCount: chat.message.length,
+                        firstMsgTime: chat.message[0]?.time ?? 0
                     });
                 } catch(e) {
                     console.error(`[Server] Cold storage write failed for chat ${j} in character ${character.chaId}:`, e);
