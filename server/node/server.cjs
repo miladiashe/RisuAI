@@ -572,6 +572,7 @@ function writeCharRemoteFile(chaId, jsonStr) {
 function extractRisuSaveCharacters(data) {
     let offset = dbMagicRisuSaveHeader.length;
     const chaIds = [];
+    let blockIndex = 0;
 
     while (offset < data.length) {
         try {
@@ -592,6 +593,8 @@ function extractRisuSaveCharacters(data) {
             let blockData = data.subarray(offset, offset + blockLength);
             offset += blockLength;
 
+            console.log(`[Server] Block ${blockIndex}: type=${type}, name=${name}, length=${blockLength}, compression=${compression}`);
+
             if (compression) {
                 blockData = zlib.gunzipSync(blockData);
             }
@@ -604,8 +607,14 @@ function extractRisuSaveCharacters(data) {
                     if (parsed.chaId) {
                         writeCharRemoteFile(parsed.chaId, content);
                         chaIds.push(parsed.chaId);
+                        console.log(`[Server] Extracted character: ${parsed.chaId}`);
                     }
-                } catch(e) { /* skip malformed */ }
+                    else {
+                        console.warn(`[Server] Block ${blockIndex} is CHARACTER_WITH_CHAT but has no chaId`);
+                    }
+                } catch(e) {
+                    console.error(`[Server] Failed to parse CHARACTER_WITH_CHAT block ${blockIndex}:`, e.message);
+                }
             }
             else if (type === RISUSAVE_TYPE_REMOTE) {
                 // Remote pointer: character file already exists
@@ -613,13 +622,19 @@ function extractRisuSaveCharacters(data) {
                     const remoteInfo = JSON.parse(blockData.toString('utf-8'));
                     if (remoteInfo.type === RISUSAVE_TYPE_CHARACTER_WITH_CHAT && remoteInfo.name) {
                         chaIds.push(remoteInfo.name);
+                        console.log(`[Server] Found remote pointer for character: ${remoteInfo.name}`);
                     }
-                } catch(e) { /* skip */ }
+                } catch(e) {
+                    console.error(`[Server] Failed to parse REMOTE block ${blockIndex}:`, e.message);
+                }
             }
+            blockIndex++;
         } catch(e) {
+            console.error(`[Server] Error parsing block ${blockIndex} at offset ${offset}:`, e.message);
             break;
         }
     }
+    console.log(`[Server] Parsed ${blockIndex} blocks total, found ${chaIds.length} characters`);
     return chaIds;
 }
 
@@ -640,6 +655,7 @@ app.post('/api/split_db_characters', async (req, res, next) => {
 
         const rawData = await fs.readFile(dbFilePath);
         const header = checkDbHeader(rawData);
+        console.log(`[Server] splitDbCharacters: database.bin size=${rawData.length}, format=${header}`);
         let chaIds = [];
 
         if (header === 'risusave') {

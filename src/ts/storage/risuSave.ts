@@ -172,7 +172,9 @@ export class RisuSaveEncoder {
         // For node server with remote saving, pre-fetch existing remote file keys
         // to avoid per-character HTTP calls and skip JSON.stringify entirely
         // for characters whose remote files already exist
-        const useRemote = (isTauri || isNodeServer) && !disableRemoteSaving();
+        const remoteSavingDisabled = disableRemoteSaving();
+        const useRemote = (isTauri || isNodeServer) && !remoteSavingDisabled;
+        console.log(`[RisuSave init] isTauri=${isTauri}, isNodeServer=${isNodeServer}, disableRemoteSaving=${remoteSavingDisabled}, useRemote=${useRemote}, characters=${data.characters.length}`);
         let existingRemoteNames: Set<string> | null = null;
         if(useRemote && isNodeServer){
             try {
@@ -193,15 +195,20 @@ export class RisuSaveEncoder {
                 const hasAllCharacters = data.characters.every(
                     c => existingRemoteNames!.has(c.chaId)
                 );
+                console.log(`[RisuSave init] existingRemoteNames=${existingRemoteNames.size}, hasAllCharacters=${hasAllCharacters}`);
                 if(!hasAllCharacters && data.characters.length > 0){
-                    console.log('Requesting server-side character block creation...');
+                    console.log('[RisuSave init] Requesting server-side character block creation...');
                     const serverChaIds = await forageStorage.splitDbCharacters();
+                    console.log(`[RisuSave init] splitDbCharacters returned: ${JSON.stringify(serverChaIds)}`);
                     if(serverChaIds && serverChaIds.length > 0){
                         for(const chaId of serverChaIds){
                             existingRemoteNames.add(chaId);
                             this.cachedRemoteKeys.add(`remotes/${chaId}.local.bin`);
                         }
-                        console.log(`Server created ${serverChaIds.length} remote character files`);
+                        console.log(`[RisuSave init] Server created ${serverChaIds.length} remote character files`);
+                    }
+                    else{
+                        console.warn(`[RisuSave init] splitDbCharacters returned empty or null - server could not extract characters`);
                     }
                 }
             } catch(e) {
@@ -209,6 +216,8 @@ export class RisuSaveEncoder {
             }
         }
 
+        let fastPathCount = 0;
+        let slowPathCount = 0;
         for( const character of data.characters) {
             // Fast path: if remote file already exists on server, skip JSON.stringify
             // and create a small pointer block directly. This avoids allocating
@@ -219,6 +228,7 @@ export class RisuSaveEncoder {
                     RisuSaveType.CHARACTER_WITH_CHAT
                 );
                 checkedRemoteExistence.add(character.chaId);
+                fastPathCount++;
             }
             else{
                 this.blocks[character.chaId] = await this.encodeBlock({
@@ -230,8 +240,10 @@ export class RisuSaveEncoder {
                 }, {
                     remote: 'prefer'
                 });
+                slowPathCount++;
             }
         }
+        console.log(`[RisuSave init] Character encoding done: fastPath=${fastPathCount}, slowPath=${slowPathCount}`);
 
         this.cachedRemoteKeys = null;
 
