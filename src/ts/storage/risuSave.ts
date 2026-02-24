@@ -431,21 +431,26 @@ export class RisuSaveEncoder {
         }
 
         if(!arg.skipRemoteSaving){
-            if(isTauri){
-                const encoded = new TextEncoder().encode(arg.data);
-                if(!(await exists('remotes', { baseDir: BaseDirectory.AppData }))){
-                    await mkdir('remotes', { recursive: true, baseDir: BaseDirectory.AppData });
+            try {
+                if(isTauri){
+                    const encoded = new TextEncoder().encode(arg.data);
+                    if(!(await exists('remotes', { baseDir: BaseDirectory.AppData }))){
+                        await mkdir('remotes', { recursive: true, baseDir: BaseDirectory.AppData });
+                    }
+                    await writeFile(fileName, encoded!, { baseDir: BaseDirectory.AppData });
                 }
-                await writeFile(fileName, encoded!, { baseDir: BaseDirectory.AppData });
-            }
-            else if(isNodeServer){
-                // Send text directly to server, avoiding TextEncoder.encode()
-                // allocation on the client. Server writes UTF-8 to disk.
-                await forageStorage.setItemText(fileName, arg.data);
-            }
-            else{
-                const encoded = new TextEncoder().encode(arg.data);
-                await forageStorage.setItem(fileName, encoded);
+                else if(isNodeServer){
+                    // Send text directly to server, avoiding TextEncoder.encode()
+                    // allocation on the client. Server writes UTF-8 to disk.
+                    await forageStorage.setItemText(fileName, arg.data);
+                }
+                else{
+                    const encoded = new TextEncoder().encode(arg.data);
+                    await forageStorage.setItem(fileName, encoded);
+                }
+            } catch(e) {
+                console.error(`[RisuSave] Failed to write remote file ${fileName}, falling back to inline encoding:`, e);
+                return await this.encodeRawBlock(arg);
             }
         }
         return await this.encodeBlock({
