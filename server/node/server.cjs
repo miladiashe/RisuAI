@@ -603,6 +603,7 @@ async function decodeFullDatabase(rawData) {
 function decodeRisuSaveFullDatabase(data) {
     let offset = dbMagicRisuSaveHeader.length;
     const characters = [];
+    let blockIndex = 0;
 
     while (offset < data.length) {
         try {
@@ -623,6 +624,8 @@ function decodeRisuSaveFullDatabase(data) {
             let blockData = data.subarray(offset, offset + blockLength);
             offset += blockLength;
 
+            console.log(`[Server] Block ${blockIndex}: type=${type}, name=${name}, length=${blockLength}, compression=${compression}`);
+
             if (compression) {
                 blockData = zlib.gunzipSync(blockData);
             }
@@ -631,8 +634,16 @@ function decodeRisuSaveFullDatabase(data) {
                 const content = blockData.toString('utf-8');
                 try {
                     const parsed = JSON.parse(content);
-                    if (parsed.chaId) characters.push(parsed);
-                } catch(e) { /* skip malformed */ }
+                    if (parsed.chaId) {
+                        characters.push(parsed);
+                        console.log(`[Server] Extracted character: ${parsed.chaId}`);
+                    }
+                    else {
+                        console.warn(`[Server] Block ${blockIndex} is CHARACTER_WITH_CHAT but has no chaId`);
+                    }
+                } catch(e) {
+                    console.error(`[Server] Failed to parse CHARACTER_WITH_CHAT block ${blockIndex}:`, e.message);
+                }
             }
             else if (type === RISUSAVE_TYPE_REMOTE) {
                 try {
@@ -642,18 +653,24 @@ function decodeRisuSaveFullDatabase(data) {
                         const remoteFileName = `remotes/${remoteInfo.name}.local.bin`;
                         const hexPath = Buffer.from(remoteFileName, 'utf-8').toString('hex');
                         const fullPath = path.join(savePath, hexPath);
+                        console.log(`[Server] Found remote pointer for character: ${remoteInfo.name}`);
                         if (existsSync(fullPath)) {
                             const content = readFileSync(fullPath, 'utf-8');
                             const parsed = JSON.parse(content);
                             if (parsed.chaId) characters.push(parsed);
                         }
                     }
-                } catch(e) { /* skip */ }
+                } catch(e) {
+                    console.error(`[Server] Failed to parse REMOTE block ${blockIndex}:`, e.message);
+                }
             }
+            blockIndex++;
         } catch(e) {
+            console.error(`[Server] Error parsing block ${blockIndex} at offset ${offset}:`, e.message);
             break;
         }
     }
+    console.log(`[Server] Parsed ${blockIndex} blocks total, found ${characters.length} characters`);
 
     return { characters };
 }
@@ -689,7 +706,9 @@ function readColdStorageRaw(key) {
 }
 
 app.post('/api/split_db_characters', async (req, res, next) => {
+    console.log('[Server] /api/split_db_characters endpoint called');
     if(req.headers['risu-auth'].trim() !== password.trim()){
+        console.log('[Server] /api/split_db_characters auth failed');
         res.status(400).send({ error: 'Password Incorrect' });
         return;
     }
@@ -703,6 +722,7 @@ app.post('/api/split_db_characters', async (req, res, next) => {
         }
 
         const rawData = await fs.readFile(dbFilePath);
+        console.log(`[Server] splitDbCharacters: database.bin size=${rawData.length}, format=${checkDbHeader(rawData)}`);
         const db = await decodeFullDatabase(rawData);
         const chaIds = [];
 
