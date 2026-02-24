@@ -639,7 +639,9 @@ function extractRisuSaveCharacters(data) {
 }
 
 app.post('/api/split_db_characters', async (req, res, next) => {
+    console.log('[Server] /api/split_db_characters endpoint called');
     if(req.headers['risu-auth'].trim() !== password.trim()){
+        console.log('[Server] /api/split_db_characters auth failed');
         res.status(400).send({ error: 'Password Incorrect' });
         return;
     }
