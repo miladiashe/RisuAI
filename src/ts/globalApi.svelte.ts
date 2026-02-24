@@ -274,7 +274,9 @@ export async function loadAsset(id: string) {
 
 let lastSave = ''
 export let saving = $state({
-    state: false
+    state: false,
+    fileSize: 0,
+    progress: 0
 })
 
 /**
@@ -388,6 +390,8 @@ export async function saveDb() {
         }
 
         saving.state = true
+        saving.fileSize = 0
+        saving.progress = 0
         changed = false
         try {
 
@@ -426,17 +430,24 @@ export async function saveDb() {
                 continue
             }
             const dbData = new Uint8Array(encoded)
+            saving.fileSize = dbData.length
+            saving.progress = 30
             if (isTauri) {
                 await writeFile('database/database.bin', dbData, { baseDir: BaseDirectory.AppData });
+                saving.progress = 65
                 await writeFile(`database/dbbackup-${(Date.now() / 100).toFixed()}.bin`, dbData, { baseDir: BaseDirectory.AppData });
+                saving.progress = 100
             }
             else {
 
                 await forageStorage.setItem('database/database.bin', dbData)
+                saving.progress = 65
                 if (!forageStorage.isAccount) {
                     await forageStorage.setItem(`database/dbbackup-${(Date.now() / 100).toFixed()}.bin`, dbData)
+                    saving.progress = 100
                 }
-                if (forageStorage.isAccount) {
+                else {
+                    saving.progress = 100
                     await sleep(3000)
                 }
             }
@@ -457,6 +468,8 @@ export async function saveDb() {
         }
 
         saving.state = false
+        saving.fileSize = 0
+        saving.progress = 0
     }
 }
 
