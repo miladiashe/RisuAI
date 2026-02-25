@@ -1263,6 +1263,7 @@ export const languageVietnamese = {
     "seperateModelsForAxModels": "Tách biệt mô hình cho các mô hình phụ trợ",
     "axModelsDef": "Định nghĩa mô hình Ax",
     "doNotChangeSeperateModels": "Không thay đổi mô hình tách biệt khi thay đổi cài đặt trước",
+    "doNotChangeSeperateParameters": "Không thay đổi thông số tách biệt khi thay đổi cài đặt trước",
     "tools": "Công cụ",
     "action": "Hành động",
     "hotkey": "Phím nóng",

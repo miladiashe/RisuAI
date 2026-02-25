@@ -1268,6 +1268,7 @@ export const languageKorean = {
     "seperateModelsForAxModels": "보조 모델 분리",
     "axModelsDef": "보조 모델 정의",
     "doNotChangeSeperateModels": "프리셋 변경 시 분리된 모델 변경하지 않기",
+    "doNotChangeSeperateParameters": "프리셋 변경 시 분리된 파라미터 변경하지 않기",
     "tools": "도구",
     "action": "동작",
     "hotkey": "단축키",

@@ -1263,6 +1263,7 @@ export const languageChinese = {
     "seperateModelsForAxModels": "为辅助模型分离模型",
     "axModelsDef": "辅助模型定义",
     "doNotChangeSeperateModels": "预设更改时不要更改分离模型",
+    "doNotChangeSeperateParameters": "预设更改时不要更改分离参数",
     "tools": "工具",
     "action": "动作",
     "hotkey": "快捷键",

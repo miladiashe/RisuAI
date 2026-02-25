@@ -1266,6 +1266,7 @@ export const languageChineseTraditional = {
     "seperateModelsForAxModels": "為輔助模型使用獨立模型",
     "axModelsDef": "輔助模型定義",
     "doNotChangeSeperateModels": "變更預設時不更改獨立模型設定",
+    "doNotChangeSeperateParameters": "變更預設時不更改獨立參數設定",
     "tools": "工具",
     "action": "動作",
     "hotkey": "快捷鍵",

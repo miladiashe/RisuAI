@@ -566,6 +566,7 @@ export function setDatabase(data:Database){
         model: data.hypaCustomSettings?.model ?? ""     
     }
     data.doNotChangeSeperateModels ??= false
+    data.doNotChangeSeperateParameters ??= false
     data.modelTools ??= []
     data.enableScrollToActiveChar ??= true
     
@@ -1071,6 +1072,7 @@ export interface Database{
         otherAx: string
     }
     doNotChangeSeperateModels:boolean
+    doNotChangeSeperateParameters:boolean
     modelTools: string[]
     hotkeys:Hotkey[]
     fallbackModels: {
@@ -1929,8 +1931,8 @@ export function saveCurrentPreset(){
         extractJson:db.extractJson ?? '',
         groupOtherBotRole: db.groupOtherBotRole ?? 'user',
         groupTemplate: db.groupTemplate ?? '',
-        seperateParametersEnabled: db.seperateParametersEnabled ?? false,
-        seperateParameters: safeStructuredClone(db.seperateParameters),
+        seperateParametersEnabled: db.doNotChangeSeperateParameters ? false : db.seperateParametersEnabled ?? false,
+        seperateParameters: db.doNotChangeSeperateParameters ? null : safeStructuredClone(db.seperateParameters),
         customAPIFormat: safeStructuredClone(db.customAPIFormat),
         systemContentReplacement: db.systemContentReplacement,
         systemRoleReplacement: db.systemRoleReplacement,
@@ -2054,12 +2056,14 @@ export function setPreset(db:Database, newPres: botPreset){
     db.extractJson = newPres.extractJson ?? ''
     db.groupOtherBotRole = newPres.groupOtherBotRole ?? 'user'
     db.groupTemplate = newPres.groupTemplate ?? ''
-    db.seperateParametersEnabled = newPres.seperateParametersEnabled ?? false
-    db.seperateParameters = newPres.seperateParameters ? safeStructuredClone(newPres.seperateParameters) : {
-        memory: {},
-        emotion: {},
-        translate: {},
-        otherAx: {}
+    if(!db.doNotChangeSeperateParameters){
+        db.seperateParametersEnabled = newPres.seperateParametersEnabled ?? false
+        db.seperateParameters = newPres.seperateParameters ? safeStructuredClone(newPres.seperateParameters) : {
+            memory: {},
+            emotion: {},
+            translate: {},
+            otherAx: {}
+        }
     }
     db.customAPIFormat = safeStructuredClone(newPres.customAPIFormat) ?? LLMFormat.OpenAICompatible
     db.systemContentReplacement = newPres.systemContentReplacement ?? ''

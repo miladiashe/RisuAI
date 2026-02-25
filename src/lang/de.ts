@@ -1263,6 +1263,7 @@ export const languageGerman = {
     "seperateModelsForAxModels": "Separate Modelle für Hilfsmodelle",
     "axModelsDef": "Hilfsmodell-Definition",
     "doNotChangeSeperateModels": "Separate Modelle bei Voreinstellungsänderung nicht ändern",
+    "doNotChangeSeperateParameters": "Separate Parameter bei Voreinstellungsänderung nicht ändern",
     "tools": "Tools",
     "action": "Aktion",
     "hotkey": "Hotkey",

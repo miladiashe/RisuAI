@@ -18,6 +18,7 @@
 <Accordion name={language.seperateParameters} styled>
     <CheckInput bind:check={DBState.db.seperateParametersEnabled} name={language.seperateParametersEnabled} />
     {#if DBState.db.seperateParametersEnabled}
+        <CheckInput bind:check={DBState.db.doNotChangeSeperateParameters} name={language.doNotChangeSeperateParameters} />
         {#each Object.keys(DBState.db.seperateParameters) as param}
             <Accordion name={language[paramLabels[param]] ?? param} styled>
                 <span class="text-textcolor">{language.temperature} <Help key="tempature"/></span>

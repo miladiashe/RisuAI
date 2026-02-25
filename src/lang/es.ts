@@ -1263,6 +1263,7 @@ export const languageSpanish = {
     "seperateModelsForAxModels": "Modelos Separados para Modelos Auxiliares",
     "axModelsDef": "Definición de Modelos Auxiliares",
     "doNotChangeSeperateModels": "No Cambiar Modelos Separados al Cambiar Preset",
+    "doNotChangeSeperateParameters": "No Cambiar Parámetros Separados al Cambiar Preset",
     "tools": "Herramientas",
     "action": "Acción",
     "hotkey": "Tecla de Acceso Rápido",

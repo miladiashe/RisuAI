@@ -1368,6 +1368,7 @@ export const languageEnglish = {
     seperateModelsForAxModels: "Separate Models for Auxiliary Models",
     axModelsDef: "Ax Models Definition",
     doNotChangeSeperateModels: "Do Not Change Seperate Models on Preset Change",
+    doNotChangeSeperateParameters: "Do Not Change Seperate Parameters on Preset Change",
     tools: "Tools",
     action: "Action",
     hotkey: "Hotkey",
