@@ -567,6 +567,10 @@ export async function getLLMCache(text:string):Promise<string | null>{
     return await LLMCacheStorage.getItem(text)
 }
 
+export async function setLLMCache(key:string, value:string):Promise<void>{
+    await LLMCacheStorage.setItem(key, value)
+}
+
 export async function searchLLMCache(partialKey:string):Promise<{key: string, value: string}[]>{
     const results:{key: string, value: string}[] = []
     await LLMCacheStorage.iterate<string, void>((value, key) => {

@@ -13,7 +13,7 @@ import { changeColorScheme, updateColorScheme, updateTextThemeAndCSS, type Color
 import { isNodeServer, isTauri } from "src/ts/platform";
 import { get } from "svelte/store";
 import { registerMCPModule, unregisterMCPModule } from "src/ts/process/mcp/pluginmcp";
-import { getLLMCache, searchLLMCache } from "src/ts/translator/translator";
+import { getLLMCache, setLLMCache, searchLLMCache } from "src/ts/translator/translator";
 import { hasher } from "src/ts/parser/parser.svelte";
 import localforage from "localforage";
 import { LLMFlags, LLMFormat, LLMProvider, LLMTokenizer, type LLMModel } from "src/ts/model/types";
@@ -1090,6 +1090,9 @@ const makeRisuaiAPIV3 = (iframe:HTMLIFrameElement,plugin:RisuPlugin) => {
         },
         getTranslationCache: async (key: string) => {
             return getLLMCache(key)
+        },
+        setTranslationCache: async (key: string, value: string) => {
+            return setLLMCache(key, value)
         },
         _getAliases: () => {
             return {

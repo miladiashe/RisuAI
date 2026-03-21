@@ -1774,6 +1774,13 @@ interface RisuaiPluginAPI {
     getTranslationCache(key: string): Promise<string | null>;
 
     /**
+     * Sets or overwrites an entry in the LLM translation cache
+     * @param key - The cache key (original text)
+     * @param value - The translated text
+     */
+    setTranslationCache(key: string, value: string): Promise<void>;
+
+    /**
      * Registers a listener for a named plugin channel (IPC between plugins).
      * @param channelName - The channel name to listen on (scoped to this plugin)
      * @param callback - Function to call when a message is received on this channel
