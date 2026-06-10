@@ -203,12 +203,6 @@ export async function loadData() {
                     characterURLImport()
                 }
             }
-            LoadingStatusState.text = "Checking Unnecessary Files..."
-            try {
-                await cleanChunks()
-            } catch (error) {
-                console.error(error)
-            }
             LoadingStatusState.text = "Loading Plugins..."
             try {
                 await loadPlugins()
@@ -260,6 +254,7 @@ export async function loadData() {
             registerModelDynamic()
             saveDb()
             moduleUpdate()
+            cleanChunks()
             alertTOS().then((a) => {
                 if (a === false) {
                     location.reload()
@@ -518,6 +513,9 @@ async function cleanChunks() {
     if (db.account?.useSync) {
         return
     }
+    if(db.coldstorage){
+        return
+    }
 
     const uncleanable = new Set(getUncleanables(db))
     if (isTauri) {
@@ -532,6 +530,11 @@ async function cleanChunks() {
             } catch (error) {
                 console.log('error', asset.name)
             }
+        }
+
+        
+        if(!await exists('remotes', { baseDir: BaseDirectory.AppData })) {
+            await mkdir('remotes', { baseDir: BaseDirectory.AppData })
         }
 
         const remotes = await readDir('remotes', { baseDir: BaseDirectory.AppData })

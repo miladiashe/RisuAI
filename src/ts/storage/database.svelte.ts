@@ -15,9 +15,14 @@ import { type HypaV3Settings, type HypaV3Preset, createHypaV3Preset } from '../p
 import { normalizeTranslatorPresetState, type TranslatorPreset } from '../translator/presets'
 import { isTauri, isNodeServer } from "src/ts/platform"
 import { safeStructuredClone } from '../polyfill';
+import {
+    DEFAULT_CHAT_LOAD_ADDITIONAL_PAGES,
+    DEFAULT_CHAT_LOAD_INITIAL_PAGES,
+    normalizeChatLoadPages,
+} from '../chatLoadPages';
 
 //APP_VERSION_POINT is to locate the app version in the database file for version bumping
-export let appVer = "2026.4.120" //<APP_VERSION_POINT>
+export let appVer = "2026.6.103" //<APP_VERSION_POINT>
 export let webAppSubVer = ''
 
 
@@ -449,6 +454,18 @@ export function setDatabase(data:Database){
     data.maxSupaChunkSize ??= 1200
     data.ollamaURL ??= ''
     data.ollamaModel ??= ''
+    data.ollamaModelSource ??= data.aiModel === 'ollama-cloud' || data.subModel === 'ollama-cloud' ? 'cloud' : 'local'
+    data.ollamaInputMode ??= 'manual'
+    data.ollamaRequestFormat ??= LLMFormat.Ollama
+    data.ollamaApiKey ??= ''
+    data.ollamaModelName ??= ''
+    data.ollamaCloudModel ??= ''
+    data.ollamaCloudModelName ??= ''
+    data.ollamaThinkingMode ??= 'auto'
+    if ((data.aiModel === 'ollama-cloud' || data.subModel === 'ollama-cloud') && !data.ollamaCloudModel) {
+        data.ollamaCloudModel = data.ollamaModel
+        data.ollamaCloudModelName = data.ollamaModelName
+    }
     data.autoContinueChat ??= false
     data.autoContinueMinTokens ??= 0
     data.repetition_penalty ??= 1
@@ -562,6 +579,7 @@ export function setDatabase(data:Database){
     data.showPromptComparison ??= false
     data.OaiCompAPIKeys ??= {}
     data.reasoningEffort ??= 0
+    data.verbosity ??= 1
     data.hypaV3Presets ??= [
         createHypaV3Preset("Default", {
             summarizationPrompt: data.supaMemoryPrompt ? data.supaMemoryPrompt : "",
@@ -585,7 +603,9 @@ export function setDatabase(data:Database){
     data.toggleConfirmRecommendedPreset ??= false
     data.useExperimentalGoogleTranslator ??= false
     data.thinkingType ??= 'budget'
+    data.deepseekThinkingType ??= 'off'
     data.adaptiveThinkingEffort ??= 'high'
+    data.deepseekReasoningEffort ??= 'high'
     if(data.antiClaudeOverload){ //migration
         data.antiClaudeOverload = false
         data.antiServerOverloads = true
@@ -631,6 +651,7 @@ export function setDatabase(data:Database){
     }
     data.customModels ??= []
     data.authRefreshes ??= []
+    data.openAIFlexProcessing ??= false
     data.rememberToolUsage ??= true
     data.simplifiedToolUse ??= false
     data.streamGeminiThoughts ??= false
@@ -658,6 +679,8 @@ export function setDatabase(data:Database){
     data.autoScrollToNewMessage ??= true
     data.alwaysScrollToNewMessage ??= false
     data.newMessageButtonStyle ??= 'bottom-center'
+    data.chatLoadInitialPages = normalizeChatLoadPages(data.chatLoadInitialPages, DEFAULT_CHAT_LOAD_INITIAL_PAGES)
+    data.chatLoadAdditionalPages = normalizeChatLoadPages(data.chatLoadAdditionalPages, DEFAULT_CHAT_LOAD_ADDITIONAL_PAGES)
     data.echoMessage ??= "Echo Message"
     data.echoDelay ??= 0
     if(!isNodeServer && !isTauri){
@@ -674,6 +697,9 @@ export function setDatabase(data:Database){
     data.keepSessionAlive ??= 'off'
     data.loadouts ??= []
     data.longPressToPopupEditor ??= false
+    data.customSidebarItems ??= []
+    data.moveInsteadOfCopyOnCMPConvert ??= false
+    data.skipSavingAssetsOnWebSync ??= true
     changeLanguage(data.language)
     setDatabaseLite(data)
 }
@@ -744,6 +770,16 @@ export interface DynamicOutput {
     dynamicOutputPrompt: boolean
     showTypingEffect: boolean
     dynamicRequest: boolean
+}
+
+export interface RisuPersona {
+    personaPrompt:string
+    name:string
+    icon:string
+    largePortrait?:boolean
+    id?:string
+    note?:string
+    embeddedModule?:RisuModule
 }
 
 export interface Database{
@@ -899,14 +935,7 @@ export interface Database{
     nanogptUseSubscriptionEndpoint:boolean
     openrouterFallback:boolean
     selectedPersona:number
-    personas:{
-        personaPrompt:string
-        name:string
-        icon:string
-        largePortrait?:boolean
-        id?:string
-        note?:string
-    }[]
+    personas:RisuPersona[]
     personaNote:boolean
     assetWidth:number
     animationSpeed:number
@@ -979,6 +1008,14 @@ export interface Database{
     maxSupaChunkSize:number
     ollamaURL:string
     ollamaModel:string
+    ollamaModelSource:'local'|'cloud'
+    ollamaInputMode:'list'|'manual'
+    ollamaRequestFormat:LLMFormat
+    ollamaApiKey:string
+    ollamaModelName:string
+    ollamaCloudModel:string
+    ollamaCloudModelName:string
+    ollamaThinkingMode:'auto'|'off'|'on'|'low'|'medium'|'high'
     autoContinueChat:boolean
     autoContinueMinTokens:number
     removeIncompleteResponse:boolean
@@ -1097,7 +1134,9 @@ export interface Database{
     useExperimentalGoogleTranslator:boolean
     thinkingTokens: number
     thinkingType: 'off' | 'budget' | 'adaptive'
-    adaptiveThinkingEffort: 'low' | 'medium' | 'high' | 'max'
+    deepseekThinkingType: 'off' | 'enabled'
+    adaptiveThinkingEffort: 'low' | 'medium' | 'high' | 'xhigh' | 'max'
+    deepseekReasoningEffort: 'high' | 'max'
     antiServerOverloads: boolean
     hypaCustomSettings: {
         url: string,
@@ -1107,7 +1146,7 @@ export interface Database{
     localActivationInGlobalLorebook: boolean
     showFolderName: boolean
     automaticCachePoint: boolean
-    chatCompression: boolean
+    coldstorage: boolean
     claudeRetrivalCaching: boolean
     outputImageModal: boolean
     playMessageOnTranslateEnd:boolean
@@ -1153,6 +1192,7 @@ export interface Database{
     }[]
     promptInfoInsideChat:boolean
     promptTextInfoInsideChat:boolean
+    openAIFlexProcessing:boolean
     claudeBatching:boolean
     claude1HourCaching:boolean
     rememberToolUsage:boolean
@@ -1192,6 +1232,8 @@ export interface Database{
     autoScrollToNewMessage?: boolean
     alwaysScrollToNewMessage?: boolean
     newMessageButtonStyle?: string
+    chatLoadInitialPages?: number
+    chatLoadAdditionalPages?: number
     pluginDevelopMode?: boolean
     echoMessage?:string
     echoDelay?:number
@@ -1209,6 +1251,17 @@ export interface Database{
     longPressToPopupEditor?: boolean
     loadouts: Loadout[]
     disableAprilFools?:boolean
+    customSidebarItems: CustomSideBarItem[]
+    lastLoadedLoadoutName: string
+    moveInsteadOfCopyOnCMPConvert?:boolean
+    skipSavingAssetsOnWebSync?:boolean
+}
+
+export interface CustomSideBarItem{
+    id: string
+    type: 'model'|'databaseKey'|'loadout'|'persona'|'preset'|'setting'
+    subType: string
+    label: string
 }
 
 export interface SeparateParameters{
@@ -1223,7 +1276,9 @@ export interface SeparateParameters{
     reasoning_effort?:number
     thinking_tokens?:number
     thinking_type?: 'off' | 'budget' | 'adaptive'
-    adaptive_thinking_effort?: 'low' | 'medium' | 'high' | 'max'
+    deepseek_thinking_type?: 'off' | 'enabled'
+    adaptive_thinking_effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max'
+    deepseek_reasoning_effort?: 'high' | 'max'
     outputImageModal?:boolean
     verbosity?:number
 }
@@ -1365,6 +1420,21 @@ export interface character{
     private?:boolean
     additionalText:string
     oaiVoice?:string
+    oaiTTSConfig?:{
+        /** User opted into advanced OpenAI-compatible settings. When false/absent,
+         *  tts.ts ignores the other fields and uses the legacy oaiVoice + db.openAIKey path. */
+        enabled?: boolean
+        /** Base URL, trailing slash trimmed at runtime. Falls back to 'https://api.openai.com/v1'. */
+        baseURL?: string
+        /** Per-character API key. Falls back to db.openAIKey; the Authorization header is omitted entirely when both are empty. */
+        apiKey?: string
+        /** Model ID. Falls back to 'tts-1'. */
+        model?: string
+        /** Freeform voice ID for custom endpoints. Falls back to character.oaiVoice, then to 'alloy'. */
+        voice?: string
+        /** Response format. Falls back to 'mp3'. */
+        format?: 'mp3' | 'opus' | 'aac' | 'flac' | 'wav' | 'pcm'
+    }
     virtualscript?:string
     scriptstate?:{[key:string]:string|number|boolean}
     depth_prompt?: { depth: number, prompt: string }
@@ -1404,6 +1474,7 @@ export interface character{
     modules?:string[]
     coldstorage?:string
     coldStoragedChats?:string[]
+    customModuleToggle?:string
 }
 
 
@@ -1460,6 +1531,7 @@ export interface groupChat{
     ttsSpeech?:string
     naittsConfig?:any
     oaiVoice?:string
+    oaiTTSConfig?:any
     hfTTS?: any
     vits?: OnnxModelFiles
     gptSoVitsConfig?:any
@@ -1567,7 +1639,9 @@ export interface botPreset{
     reasonEffort?:number
     thinkingTokens?:number
     thinkingType?: 'off' | 'budget' | 'adaptive'
-    adaptiveThinkingEffort?: 'low' | 'medium' | 'high' | 'max'
+    deepseekThinkingType?: 'off' | 'enabled'
+    adaptiveThinkingEffort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max'
+    deepseekReasoningEffort?: 'high' | 'max'
     outputImageModal?:boolean
     seperateModelsForAxModels?:boolean
     seperateModels?:{
@@ -2012,7 +2086,9 @@ export function saveCurrentPreset(){
         reasonEffort: db.reasoningEffort ?? 0,
         thinkingTokens: db.thinkingTokens ?? null,
         thinkingType: db.thinkingType ?? 'budget',
+        deepseekThinkingType: db.deepseekThinkingType ?? 'off',
         adaptiveThinkingEffort: db.adaptiveThinkingEffort ?? 'high',
+        deepseekReasoningEffort: db.deepseekReasoningEffort ?? 'high',
         outputImageModal: db.outputImageModal ?? false,
         seperateModelsForAxModels: db.doNotChangeSeperateModels ? false : db.seperateModelsForAxModels ?? false,
         seperateModels: db.doNotChangeSeperateModels ? null : safeStructuredClone(db.seperateModels),
@@ -2134,7 +2210,9 @@ export function setPreset(db:Database, newPres: botPreset){
     db.reasoningEffort = newPres.reasonEffort ?? 0
     db.thinkingTokens = newPres.thinkingTokens ?? null
     db.thinkingType = newPres.thinkingType ?? 'budget'
+    db.deepseekThinkingType = newPres.deepseekThinkingType ?? 'off'
     db.adaptiveThinkingEffort = newPres.adaptiveThinkingEffort ?? 'high'
+    db.deepseekReasoningEffort = newPres.deepseekReasoningEffort ?? 'high'
     db.outputImageModal = newPres.outputImageModal ?? false
     if(!db.doNotChangeSeperateModels){
         db.seperateModelsForAxModels = newPres.seperateModelsForAxModels ?? false
